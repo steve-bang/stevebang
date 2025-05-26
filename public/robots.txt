@@ -1,0 +1,11 @@
+User-agent: *
+Disallow: /projects
+ 
+
+User-agent: *
+Allow: /
+Allow: /about/
+Allow: /blog/
+Allow: /blog/*
+
+Sitemap: https://www.steve-bang.com/sitemap.xml
