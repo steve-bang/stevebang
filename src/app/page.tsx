@@ -111,7 +111,7 @@ export default function Home() {
                 </div>
                 <h3 className="text-lg font-semibold mb-2">Domain Driven Design Trong .NET: Từ Tư Duy Đến Triển Khai</h3>
                 <p className="text-gray-600 text-sm mb-3">Tìm hiểu Domain Driven Design (DDD) trong .NET với hướng dẫn chi tiết từ tư duy kiến trúc đến...</p>
-                <Link href="/blog/building-scalable-dotnet-applications" className="text-primary hover:underline text-sm">Đọc thêm →</Link>
+                <Link href="/blog/domain-driven-design-trong-dot-net-tu-tu-duy-den-trien-khai" className="text-primary hover:underline text-sm">Đọc thêm →</Link>
               </div>
             </AnimatedSection>
 
