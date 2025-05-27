@@ -168,9 +168,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
               alt={post.title}
               width={1200}
               height={630}
-              className="w-full h-[400px] object-cover rounded-lg"
-              priority
-              itemProp="url"
+              className="w-full max-h-[300px] sm:max-h-[400px] object-cover rounded-lg"
             />
             <meta itemProp="width" content="1200" />
             <meta itemProp="height" content="630" />
