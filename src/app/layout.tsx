@@ -33,7 +33,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
   },
   verification: {
-    google: "your-google-site-verification",
+    google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION || "",
   }
 };
 
