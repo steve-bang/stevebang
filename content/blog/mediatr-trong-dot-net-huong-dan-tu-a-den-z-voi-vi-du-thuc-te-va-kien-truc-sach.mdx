@@ -1,0 +1,333 @@
+---
+title: "MediatR trong .NET: Hướng Dẫn Từ A đến Z Với Ví Dụ Thực Tế và Kiến Trúc Sạch"
+date: "2025-05-27"
+description: "Khám phá cách sử dụng MediatR trong .NET để triển khai Mediator Pattern, giảm phụ thuộc giữa các lớp, cải thiện kiến trúc và dễ bảo trì mã nguồn. Hướng dẫn kèm ví dụ thực tế và tips tối ưu."
+tags: ["dotnet", "mediatr" , "cqrs", "dependencyinjection", "cleanarchitecture"]
+author: "Steve Bang"
+readingTime: "20 min read"
+image: "/images/mediatr-trong-dot-net-huong-dan-tu-a-den-z-voi-vi-du-thuc-te-va-kien-truc-sach.png"
+---
+# Đặt vấn đề
+Trong quá khứ, các ứng dụng .NET – dù nhỏ hay lớn – thường phát triển theo cách Controller gọi trực tiếp vào Service, rồi đến Repository. Cách làm này đơn giản nhưng mau chóng trở nên hỗn loạn khi ứng dụng mở rộng. Controller trở nên “béo phì”, nhiều lớp phụ thuộc nhau như một mạng nhện logic khó gỡ rối và khó test.
+
+Chúng ta từng nghĩ rằng chia nhỏ thành các service là đã “kiến trúc tốt”. Nhưng:
+
+- Làm sao để tách biệt logic đọc và ghi?
+- Làm sao để xử lý các luồng nghiệp vụ phức tạp như gửi email, gửi log, tạo thông báo... mà không phá vỡ Single Responsibility?
+- Làm sao để kiểm thử mà không cần giả lập cả dàn Service?
+
+Câu trả lời đến từ một mô hình thiết kế cũ nhưng được hồi sinh mạnh mẽ: Mediator Pattern – và trong .NET, chúng ta có MediatR.
+
+**Mediator Pattern** (Mẫu thiết kế Trung gian) ra đời như một giải pháp để giảm sự phụ thuộc giữa các đối tượng, giúp mã nguồn sạch hơn, dễ bảo trì hơn.
+
+Trong .NET, thư viện **MediatR** là một hiện thực phổ biến và mạnh mẽ của mẫu thiết kế này. Hãy cùng khám phá!
+
+# Mediator Pattern là gì?
+
+Mediator là mẫu thiết kế thuộc nhóm **Behavioral Pattern**, đóng vai trò như "người trung gian" giúp các đối tượng trong hệ thống giao tiếp với nhau mà không cần biết rõ về nhau.
+
+Thay vì `Class A` gọi trực tiếp đến `Class B`, `Class A` sẽ gửi một thông điệp (message/request) đến `Mediator`, sau đó `Mediator` sẽ chuyển tiếp đến Handler tương ứng để xử lý trong hệ thống và chỉ cần trả kết quả là xong.
+
+# MediatR – Triển khai Mediator trong .NET
+
+## Cài đặt
+Có thể cài MediatR dễ dàng thông qua NuGet:
+```
+dotnet add package MediatR.Extensions.Microsoft.DependencyInjection
+```
+
+Đăng ký MediatR trong Program.cs
+```
+builder.Services.AddMediatR(cfg => 
+    cfg.RegisterServicesFromAssembly(typeof(Program).Assembly));
+```
+
+## Cấu trúc cơ bản của MediatR
+Giả sử bạn có một tính năng đơn giản: Lấy thông tin người dùng theo ID.
+### 1. Request (Query)
+``` 
+public record GetUserByIdQuery(Guid Id) : IRequest<UserDto>;
+```
+
+### 2. Handler 
+```
+public class GetUserByIdHandler : IRequestHandler<GetUserByIdQuery, UserDto>
+{
+    private readonly IUserRepository _userRepo;
+
+    public GetUserByIdHandler(IUserRepository userRepo)
+    {
+        _userRepo = userRepo;
+    }
+
+    public async Task<UserDto> Handle(GetUserByIdQuery request, CancellationToken cancellationToken)
+    {
+        var user = await _userRepo.GetByIdAsync(request.Id);
+        return new UserDto(user.Id, user.Name);
+    }
+}
+```
+
+### 3. Gọi trong Controller
+```
+
+[ApiController]
+[Route("api/users")]
+public class UsersController : ControllerBase
+{
+    private readonly IMediator _mediator;
+
+    public UsersController(IMediator mediator)
+    {
+        _mediator = mediator;
+    }
+
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetById(int id)
+    {
+        var user = await _mediator.Send(new GetUserByIdQuery(id));
+        return Ok(user);
+    }
+}
+
+```
+
+# MediatR và Clean Architecture - Cặp đôi hoàn hảo trong kiến trúc .NET
+
+## Clean Architecture là gì?
+Clean Architecture là một kiến trúc phần mềm do Robert C. Martin (Uncle Bob) đề xuất. Mục tiêu của nó là:
+
+- Tách biệt rõ ràng các tầng: Domain (Logic nghiệp vụ), Application (Use Cases), Infrastructure (Database, API), Presentation (Web/API).
+- Đảm bảo tính độc lập giữa các thành phần – tầng bên ngoài có thể thay đổi mà không ảnh hưởng đến lõi ứng dụng.
+- Dễ kiểm thử, bảo trì, mở rộng trong dài hạn.
+
+Mô hình cấu trúc 
+```
+Presentation ──> Application ──> Domain <── Entities
+                         │
+               Infrastructure (DB, Files, APIs)
+```
+
+Trong tầng **Application**, bạn có rất nhiều Use Case như:
+- CreateUser
+- UpdateOrder
+- SendInvoiceEmail
+- GetUserById
+
+Mỗi Use Case là một logic độc lập, nhưng nếu bạn quản lý bằng cách viết toàn bộ trong Service hoặc Controller thì:
+
+- Khó quản lý khi số lượng Use Case tăng lên.
+- Dễ vi phạm nguyên tắc SRP (Single Responsibility Principle).
+- Test phức tạp do các Service phụ thuộc lẫn nhau.
+
+**Vậy MediatR là vị cứu tinh**
+
+MediatR là một thư viện .NET giúp bạn triển khai Mediator Pattern một cách dễ dàng:
+
+- Mỗi Use Case sẽ là một Request (ví dụ: CreateUserCommand) và một Handler riêng (CreateUserCommandHandler).
+- Mọi giao tiếp giữa Presentation và Application đều đi qua IMediator.Send(...).
+- Không có service “to tướng” nữa, mà mọi logic được chia nhỏ và đóng gói theo mục đích.
+
+## Tóm lại
+Như vậy **MediatR** và **Clean Architecture** là một sự kết hợp hoàn hảo cho kiến trúc phát triển phần mềm theo cách hiện đại. Giúp cho developer xây dựng ứng dụng rõ ràng hơn, có sự tách biệt, dễ dàng test và dễ dàng phát triển, đặc biệt là giảm sự phụ thuộc lẫn nhau và tuân thủ theo nguyên lý SOLID.
+
+# Pipeline Behaviors – Xử lý trung gian nâng cao trong MediatR
+## Pipeline Behaviors là gì?
+
+Trong **MediatR**, ngoài việc xử lý các Request bằng các Handler, bạn còn có thể chèn vào các bước trung gian xử lý logic chung thông qua thứ gọi là Pipeline Behavior.
+Nói cách khác:
+
+**Pipeline Behavior = Middleware dành riêng cho Request/Response trong MediatR.**
+
+Nó hoạt động giống như **middleware trong ASP.NET Core**, nhưng chỉ áp dụng bên trong luồng xử lý của MediatR.
+
+## Vậy tại sao cần Pipeline Behaviors?
+
+Giả sử trong thực tế:
+
+- Log toàn bộ request & response
+- Kiểm tra quyền truy cập (authorization)
+- Validate dữ liệu bằng **FluentValidation**
+- Bắt thời gian thực thi của từng handler
+- Bắt lỗi exception và xử lý thống nhất
+- Thêm cache cho một số truy vấn (query)
+
+Bạn **không nên** viết những logic này trong mỗi `Handler`, vì sẽ **vi phạm nguyên tắc DRY** và khiến code khó bảo trì.
+
+Pipeline Behaviors chính một là **nơi lý tưởng** để bạn giải quyết vấn đề này.
+
+## Cấu trúc một PipelineBehavior
+```
+public class LoggingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
+{
+    private readonly ILogger<LoggingBehavior<TRequest, TResponse>> _logger;
+
+    public LoggingBehavior(ILogger<LoggingBehavior<TRequest, TResponse>> logger)
+    {
+        _logger = logger;
+    }
+
+    public async Task<TResponse> Handle(
+        TRequest request,
+        RequestHandlerDelegate<TResponse> next,
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Handling {RequestName}", typeof(TRequest).Name);
+        var response = await next(); // Gọi handler tiếp theo
+        _logger.LogInformation("Handled {RequestName}", typeof(TRequest).Name);
+        return response;
+    }
+}
+
+```
+
+## Pipeline hoạt động ra sao?
+
+Giả sử tôi có 1 tính năng CreateUser,
+Thì khi gọi phương thức sau:
+```
+await _mediator.Send(new CreateUserCommand());
+```
+MediatR sẽ làm 3 việc:
+- Tìm các `IPipelineBehavior<TRequest, TResponse>` đã được đăng ký.
+- Xây dựng chuỗi xử lý (pipeline) dựa theo thứ tự đăng ký các behaviors.
+- Thực thi từng behavior một, theo thứ tự lồng nhau, cho tới khi gọi đến Handler.
+
+Giả sử bạn có 3 behaviors được đăng ký theo thứ tự:
+```
+services.AddTransient(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
+services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
+services.AddTransient(typeof(IPipelineBehavior<,>), typeof(PerformanceBehavior<,>));
+```
+
+Khi đó pipeline sẽ hoạt động như sau:
+```
+LoggingBehavior
+└── ValidationBehavior
+    └── PerformanceBehavior
+        └── CreateUserCommandHandler
+```
+
+# Cấu trúc thư mục dự án
+
+Như vậy, sau khi đã tìm hiểu kỹ về MediatR thì hãy xem lại hầu như các dự án cũ sẽ có cấu trúc thư mục dự án như sau: 
+
+```
+Project
+ ┣ 📂Controllers
+ ┃ ┗ 📄UserController.cs
+ ┣ 📂Services
+ ┃ ┗ 📄UserService.cs
+ ┣ 📂Repositories
+ ┃ ┗ 📄UserRepository.cs
+ ┣ 📂Models
+ ┃ ┗ 📄User.cs
+ ┣ 📂DTOs
+ ┃ ┗ 📄UserDto.cs
+ ┣ 📂ViewModels
+ ┃ ┗ 📄CreateUserViewModel.cs
+ ┗ 📄Program.cs
+```
+
+Những hạn chế:
+- Controller gọi trực tiếp Service, Service gọi Repository.
+- Khó kiểm soát luồng nghiệp vụ phức tạp.
+- Khó mở rộng hoặc thêm xử lý trung gian như logging, validation, v.v.
+- Mỗi tính năng bị phân tán ra nhiều folder – khó theo dõi end-to-end.
+
+**Sau khi áp dụng MediatR + Clean Architecture (Feature-Based)**
+```
+Project
+ ┣ 📂Features
+ ┃ ┗ 📂Users
+ ┃   ┣ 📂Commands
+ ┃   ┃ ┗ 📂CreateUser
+ ┃   ┃   ┣ 📄CreateUserCommand.cs
+ ┃   ┃   ┣ 📄CreateUserCommandHandler.cs
+ ┃   ┃   ┣ 📄CreateUserValidator.cs
+ ┃   ┣ 📂Queries
+ ┃   ┃ ┗ 📂GetUserById
+ ┃   ┃   ┣ 📄GetUserByIdQuery.cs
+ ┃   ┃   ┣ 📄GetUserByIdQueryHandler.cs
+ ┃   ┣ 📂Dtos
+ ┃   ┃ ┗ 📄UserDto.cs
+ ┃   ┣ 📂Events
+ ┃   ┃ ┣ 📄UserCreatedEvent.cs
+ ┃   ┃ ┗ 📄UserCreatedEventHandler.cs
+ ┃   ┣ 📂Notifications
+ ┃   ┃ ┣ 📄SendWelcomeEmailNotification.cs
+ ┃   ┃ ┗ 📄SendWelcomeEmailHandler.cs
+ ┃   ┗ 📂Authorization
+ ┃       ┗ 📄CreateUserAuthorizationHandler.cs
+ ┣ 📂Shared
+ ┃ ┣ 📂Behaviors
+ ┃ ┃ ┣ 📄LoggingBehavior.cs
+ ┃ ┃ ┣ 📄ValidationBehavior.cs
+ ┃ ┃ ┣ 📄PerformanceBehavior.cs
+ ┃ ┃ ┣ 📄AuthorizationBehavior.cs
+ ┃ ┃ ┗ 📄CachingBehavior.cs
+ ┣ 📂Infrastructure
+ ┃ ┗ 📂Persistence
+ ┃     ┗ 📄UserRepository.cs
+ ┣ 📂Controllers
+ ┃ ┗ 📄UserController.cs
+ ┗ 📄Program.cs
+```
+
+Hãy cùng điểm qua những điểm nổi bật sau khi áp dụng
+| Ưu điểm                        | Mô tả                                                                              |
+| ------------------------------ | ---------------------------------------------------------------------------------- |
+| **Feature-Based**           | Mỗi tính năng như "User" có thư mục riêng, dễ tìm và mở rộng.                      |
+| **CQRS rõ ràng**            | Commands = Ghi (write), Queries = Đọc (read) được phân chia rạch ròi.              |
+| **Plug-and-play behaviors** | Logging, Validation, Exception, Performance có thể tái sử dụng trên toàn hệ thống. |
+| **Dễ test**                 | Các handler riêng biệt, dễ viết unit test từng command/query.                      |
+| **Controller mỏng nhẹ**     | Chỉ còn nhiệm vụ nhận request, gọi `_mediator.Send(...)`.                          |
+| **Mở rộng dễ dàng**         | Chỉ cần thêm Command/Query mới mà không ảnh hưởng kiến trúc chung.                 |
+
+
+## Vai trò các Folder
+### 1. Features
+Folder chính để tổ chức theo từng tính năng (feature) của ứng dụng. Mỗi tính năng chứa các phần nhỏ như command, query, event, notification, authorization riêng biệt.
+
+- **Commands**: Chứa các lệnh (command) cho các thao tác thay đổi dữ liệu (Create, Update, Delete).
+- **Queries**: Chứa các truy vấn (query) để lấy dữ liệu, không gây thay đổi trạng thái hệ thống.
+- **Dtos**: Các Data Transfer Object dùng để trao đổi dữ liệu giữa các lớp, giúp tách biệt với Entity.
+- **Events**: Lưu các sự kiện nghiệp vụ (domain events) như UserCreatedEvent để phản ứng sau khi một hành động xảy ra.
+- **Notifications**: Thông báo, gửi tín hiệu (notification) cho các phần khác trong hệ thống (email, message, push notification).
+- **Authorization**: Xử lý ủy quyền, kiểm tra quyền hạn trước khi thực thi command hoặc query.
+
+### 2. Shared
+Chứa các thành phần dùng chung toàn bộ ứng dụng, đặc biệt là các pipeline behaviors (xử lý trung gian) của MediatR.
+
+Behaviors:
+Đây là các lớp xử lý middleware theo kiểu pipeline, chạy xen kẽ trước và sau khi Handler xử lý request.
+Ví dụ:
+
+- **LoggingBehavior**: Ghi log các request và response.
+- **ValidationBehavior**: Kiểm tra tính hợp lệ của request trước khi xử lý.
+- **PerformanceBehavior**: Đo thời gian xử lý request.
+- **AuthorizationBehavior**: Kiểm tra quyền truy cập cho request.
+- **CachingBehavior**: Lưu cache kết quả query để tăng hiệu suất.
+
+### 3. Infrastructure
+Lớp bên ngoài xử lý các công việc liên quan đến kỹ thuật hoặc tương tác với thế giới bên ngoài.
+
+Persistence:
+Thư mục chứa các lớp Repository, DbContext, hoặc các kỹ thuật lưu trữ khác (Entity Framework, Dapper, v.v).
+Đây là nơi tương tác trực tiếp với database, được gọi từ handler hoặc service.
+
+### 4. Controllers
+Các lớp Controller trong ASP.NET Core chịu trách nhiệm nhận HTTP request và chuyển tiếp request đó tới MediatR bằng _mediator.Send(...).
+
+Controller nên được giữ mỏng nhẹ, không chứa logic nghiệp vụ mà chỉ làm nhiệm vụ chuyển tiếp.
+
+# Tổng kết 
+MediatR không chỉ đơn thuần là một thư viện hỗ trợ pattern **Mediator** trong .NET, mà còn là công cụ đắc lực giúp bạn xây dựng ứng dụng theo **Clean Architecture** – tách bạch rõ ràng các trách nhiệm, nâng cao tính mở rộng và bảo trì.
+
+Việc áp dụng MediatR kèm theo các folder chuyên biệt như `Events`, `Notifications`, `Authorization`, `Behaviors`… cho phép bạn tổ chức mã nguồn theo hướng **modular**, dễ dàng quản lý, kiểm thử và phát triển.
+
+Đặc biệt, **Pipeline Behaviors** giúp bạn xử lý các logic cross-cutting concern như **validation**, **authorization**, **logging**, và **caching** một cách tập trung, tránh lặp lại và tăng tính nhất quán trong toàn bộ ứng dụng.
+
+Bạn sẽ cảm nhận được sự linh hoạt khi xây dựng các tính năng mới hoặc thay đổi yêu cầu kinh doanh mà không làm ảnh hưởng đến phần còn lại của hệ thống. Đây chính là chìa khóa để phát triển phần mềm bền vững, chuyên nghiệp trong môi trường dự án lớn và phức tạp.
+
+Nếu bạn chưa bắt đầu sử dụng MediatR, hãy thử ngay hôm nay để trải nghiệm sự khác biệt trong việc tổ chức code và tối ưu quy trình phát triển .NET của mình!

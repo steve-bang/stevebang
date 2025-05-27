@@ -5,8 +5,7 @@ import { MDXRemote } from 'next-mdx-remote/rsc';
 import Link from 'next/link';
 import { FiArrowLeft } from 'react-icons/fi';
 import Image from 'next/image';
-import { serialize } from 'next-mdx-remote/serialize'
-import remarkGfm from 'remark-gfm'
+import remarkGfm from 'remark-gfm';
 
 interface BlogPost {
   slug: string;
@@ -29,7 +28,7 @@ export async function generateMetadata({ params }: BlogPostPageProps) {
   const { slug } = await params
 
   const post = await getBlogPost(slug);
-  
+
   if (!post) {
     return {
       title: 'Post Not Found - Steve Bang',
@@ -126,6 +125,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
     notFound();
   }
 
+
   return (
     <article className="pt-32 pb-20">
       {/* JSON-LD Structured Data */}
@@ -133,7 +133,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
         type="application/ld+json"
         dangerouslySetInnerHTML={addJsonLd(post)}
       />
-      
+
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Breadcrumb */}
         <nav className="mb-8" aria-label="Breadcrumb">
@@ -178,7 +178,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
         )}
 
         {/* Article Content */}
-        <article className="max-w-none markdown-content" itemProp="articleBody">
+        <article className="markdown-content" itemProp="articleBody">
           <MDXRemote source={post.content}
             options={{
               mdxOptions: {

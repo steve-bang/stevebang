@@ -42,7 +42,7 @@ export default function Home() {
                 { value: '50K+', label: 'Độc giả' },
                 { value: '3+', label: 'Năm kinh nghiệm' }
               ].map((stat, index) => (
-                <AnimatedSection 
+                <AnimatedSection
                   key={stat.label}
                   delay={0.6 + index * 0.1}
                   className="text-center"
@@ -76,7 +76,7 @@ export default function Home() {
               </button>
             </AnimatedSection>
 
-            
+
           </div>
         </div>
       </section>
@@ -84,7 +84,7 @@ export default function Home() {
       {/* Featured Posts */}
       <section className="py-20 bg-gradient-to-br from-gray-100 to-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <AnimatedSection 
+          <AnimatedSection
             whileInView={{ opacity: 1, y: 0 }}
             className="text-3xl font-bold mb-12 text-center"
           >
@@ -92,14 +92,37 @@ export default function Home() {
           </AnimatedSection>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {/* Featured Post 1 */}
-            <AnimatedSection 
+            <AnimatedSection
               whileInView={{ opacity: 1, y: 0 }}
               delay={0.2}
               whileHover={{ y: -10 }}
               className="bg-white rounded-lg shadow-sm overflow-hidden transition-all duration-200 max-w-sm mx-auto"
             >
-              <Image 
-                src="/images/domain-driven-design.png" 
+              <Image
+                src="/images/mediatr-trong-dot-net-huong-dan-tu-a-den-z-voi-vi-du-thuc-te-va-kien-truc-sach.png"
+                alt="Featured post image"
+                width={400}
+                height={250}
+                className="w-full h-40 object-cover"
+              />
+              <div className="p-4">
+                <div className="flex items-center space-x-2 mb-3">
+                  <span className="bg-primary bg-opacity-10 text-primary px-2.5 py-0.5 rounded-full text-xs">.NET, MediatR</span>
+                </div>
+                <h3 className="text-lg font-semibold mb-2">MediatR trong .NET: Hướng Dẫn Từ A đến Z Với Ví Dụ Thực Tế và Kiến Trúc Sạch</h3>
+                <p className="text-gray-600 text-sm mb-3">Khám phá cách sử dụng MediatR trong .NET để triển khai Mediator Pattern, giảm phụ thuộc giữa các lớp...</p>
+                <Link href="/blog/mediatr-trong-dot-net-huong-dan-tu-a-den-z-voi-vi-du-thuc-te-va-kien-truc-sach" className="text-primary hover:underline text-sm">Đọc thêm →</Link>
+              </div>
+            </AnimatedSection>
+
+            <AnimatedSection
+              whileInView={{ opacity: 1, y: 0 }}
+              delay={0.2}
+              whileHover={{ y: -10 }}
+              className="bg-white rounded-lg shadow-sm overflow-hidden transition-all duration-200 max-w-sm mx-auto"
+            >
+              <Image
+                src="/images/domain-driven-design.png"
                 alt="Featured post image"
                 width={400}
                 height={250}
@@ -114,31 +137,6 @@ export default function Home() {
                 <Link href="/blog/domain-driven-design-trong-dot-net-tu-tu-duy-den-trien-khai" className="text-primary hover:underline text-sm">Đọc thêm →</Link>
               </div>
             </AnimatedSection>
-
-            {/* Featured Post 2 */}
-            {/* <AnimatedSection 
-              whileInView={{ opacity: 1, y: 0 }}
-              delay={0.3}
-              whileHover={{ y: -10 }}
-              className="bg-white rounded-lg shadow-sm overflow-hidden transition-all duration-200 max-w-sm mx-auto"
-            >
-              <Image 
-                src="https://via.placeholder.com/400x250" 
-                alt="Featured post image"
-                width={400}
-                height={250}
-                className="w-full h-40 object-cover"
-              />
-              <div className="p-4">
-                <div className="flex items-center space-x-2 mb-3">
-                  <span className="bg-primary bg-opacity-10 text-primary px-2.5 py-0.5 rounded-full text-xs">Architecture</span>
-                </div>
-                <h3 className="text-lg font-semibold mb-2">Clean Architecture in Practice</h3>
-                <p className="text-gray-600 text-sm mb-3">A comprehensive guide to implementing clean architecture in your
-                  projects...</p>
-                <Link href="/blog/clean-architecture-in-practice" className="text-primary hover:underline text-sm">Đọc thêm →</Link>
-              </div>
-            </AnimatedSection> */}
 
             {/* Featured Post 3 */}
             {/* <AnimatedSection 
@@ -166,7 +164,7 @@ export default function Home() {
             </AnimatedSection> */}
           </div>
           {/* View All Blogs Link */}
-          <AnimatedSection 
+          <AnimatedSection
             whileInView={{ opacity: 1, y: 0 }}
             delay={0.5}
             className="text-center mt-12"
