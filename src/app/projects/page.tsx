@@ -34,7 +34,7 @@ export default function ProjectsPage() {
   return (
     <section className="py-16 bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <h1 className="text-4xl font-bold mb-10 text-center text-[#512BD4]">Dự án</h1>
+        <h1 className="text-4xl font-bold mb-10 text-center text-[#512BD4]">Projects</h1>
         <div className="space-y-8">
           {projects.map((project) => (
             <div key={project.title} className="border-l-4 border-[#512BD4] pl-4 py-2 bg-white shadow-md rounded-lg transition-transform hover:scale-105">
@@ -45,12 +45,12 @@ export default function ProjectsPage() {
               </h2>
               <p className="text-gray-600 mb-2">{project.description}</p>
               <p className="text-sm text-gray-500 flex items-center">
-                <span className="mr-2">Từ: {format(new Date(project.startDate), 'MMM d, yyyy')}</span>
+                <span className="mr-2">From: {format(new Date(project.startDate), 'MMM d, yyyy')}</span>
                 <span className="mx-2">|</span>
-                <span>Đến: {project.endDate ? format(new Date(project.endDate), 'MMM d, yyyy') : 'Hiện tại'}</span>
+                <span>To: {project.endDate ? format(new Date(project.endDate), 'MMM d, yyyy') : 'Current'}</span>
               </p>
               <Link href={project.link} className="text-[#512BD4] hover:underline mt-2 inline-block">
-                Xem chi tiết
+                View Details
               </Link>
             </div>
           ))}

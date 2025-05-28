@@ -23,24 +23,24 @@ export default function Home() {
           <div className="text-center">
             {/* Animated Badge */}
             <AnimatedSection className="inline-flex items-center px-4 py-2 rounded-full bg-primary bg-opacity-10 text-primary mb-8">
-              <span className="text-sm font-medium">Chào mừng đến với <b>Steve Bang</b> Blog</span>
+              <span className="text-sm font-medium">Welcome to <b>Steve Bang</b> Blog</span>
             </AnimatedSection>
 
             <AnimatedSection delay={0.2} className="text-4xl md:text-6xl font-bold mb-6 leading-tight">
               <span className="bg-gradient-to-r from-purple-600 to-blue-500 bg-clip-text text-transparent">Software Engineering</span><br />
-              <span className="text-gray-900">Góc Nhìn & Trải Nghiệm</span>
+              <span className="text-gray-900">Insights & Experiences</span>
             </AnimatedSection>
 
             <AnimatedSection delay={0.4} className="text-xl text-gray-600 mb-8 max-w-3xl mx-auto">
-              Chia sẻ kiến thức lập trình đến tất cả mọi người một cách dễ hiểu, dễ tiếp cận, thực tiễn và truyền cảm hứng cho cộng đồng.
+              Exploring the world of software development through practical experiences, tutorials, and deep dives into modern technologies.
             </AnimatedSection>
 
             {/* Stats */}
             <AnimatedSection delay={0.6} className="flex justify-center gap-8 mb-12">
               {[
-                { value: '100+', label: 'Bài viết' },
-                { value: '50K+', label: 'Độc giả' },
-                { value: '3+', label: 'Năm kinh nghiệm' }
+                { value: '100+', label: 'Articles' },
+                { value: '50K+', label: 'Readers' },
+                { value: '3+', label: 'Years Experience' }
               ].map((stat, index) => (
                 <AnimatedSection
                   key={stat.label}
@@ -61,8 +61,8 @@ export default function Home() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path>
                   </svg>
                 </span>
-                <span className="absolute flex items-center justify-center w-full h-full text-white transition-all duration-300 transform group-hover:translate-x-full ease">Bài viết mới nhất</span>
-                <span className="relative invisible">Bài viết mới nhất</span>
+                <span className="absolute flex items-center justify-center w-full h-full text-white transition-all duration-300 transform group-hover:translate-x-full ease">Read Latest Posts</span>
+                <span className="relative invisible">Read Latest Posts</span>
               </Link>
               <button
                 className="group relative inline-flex items-center justify-center px-8 py-4 overflow-hidden font-medium transition duration-300 ease-out rounded-lg shadow-md bg-white border-2 border-primary text-primary hover:bg-primary hover:text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary cursor-pointer">
@@ -71,8 +71,8 @@ export default function Home() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
                   </svg>
                 </span>
-                <span className="absolute flex items-center justify-center w-full h-full transition-all duration-300 transform group-hover:translate-x-full ease">Đăng ký ngay</span>
-                <span className="relative invisible">Đăng ký ngay</span>
+                <span className="absolute flex items-center justify-center w-full h-full transition-all duration-300 transform group-hover:translate-x-full ease">Subscribe to Newsletter</span>
+                <span className="relative invisible">Subscribe to Newsletter</span>
               </button>
             </AnimatedSection>
 
@@ -88,7 +88,7 @@ export default function Home() {
             whileInView={{ opacity: 1, y: 0 }}
             className="text-3xl font-bold mb-12 text-center"
           >
-            Bài viết phổ biến
+            Featured Articles
           </AnimatedSection>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {/* Featured Post 1 */}
@@ -109,9 +109,9 @@ export default function Home() {
                 <div className="flex items-center space-x-2 mb-3">
                   <span className="bg-primary bg-opacity-10 text-primary px-2.5 py-0.5 rounded-full text-xs">.NET, MediatR</span>
                 </div>
-                <h3 className="text-lg font-semibold mb-2">MediatR trong .NET: Hướng Dẫn Từ A đến Z Với Ví Dụ Thực Tế và Kiến Trúc Sạch</h3>
-                <p className="text-gray-600 text-sm mb-3">Khám phá cách sử dụng MediatR trong .NET để triển khai Mediator Pattern, giảm phụ thuộc giữa các lớp...</p>
-                <Link href="/blog/mediatr-trong-dot-net-huong-dan-tu-a-den-z-voi-vi-du-thuc-te-va-kien-truc-sach" className="text-primary hover:underline text-sm">Đọc thêm →</Link>
+                <h3 className="text-lg font-semibold mb-2">MediatR in .NET: A Complete Guide with Real Examples and Clean Architecture</h3>
+                <p className="text-gray-600 text-sm mb-3">Discover how to use MediatR in .NET to implement the Mediator Pattern, reduce dependencies between layers,...</p>
+                <Link href="/blog/mediatR-in-dot-net-a-complete-guide-with-real-examples-and-clean-architecture" className="text-purple-600 hover:underline text-sm">Read more →</Link>
               </div>
             </AnimatedSection>
 
@@ -132,9 +132,9 @@ export default function Home() {
                 <div className="flex items-center space-x-2 mb-3">
                   <span className="bg-primary bg-opacity-10 text-primary px-2.5 py-0.5 rounded-full text-xs">.NET</span>
                 </div>
-                <h3 className="text-lg font-semibold mb-2">Domain Driven Design Trong .NET: Từ Tư Duy Đến Triển Khai</h3>
-                <p className="text-gray-600 text-sm mb-3">Tìm hiểu Domain Driven Design (DDD) trong .NET với hướng dẫn chi tiết từ tư duy kiến trúc đến...</p>
-                <Link href="/blog/domain-driven-design-trong-dot-net-tu-tu-duy-den-trien-khai" className="text-primary hover:underline text-sm">Đọc thêm →</Link>
+                <h3 className="text-lg font-semibold mb-2">Domain Driven Design in .NET: From Concept to Implementation</h3>
+                <p className="text-gray-600 text-sm mb-3">Explore Domain Driven Design (DDD) in .NET with a detailed guide from architectural...</p>
+                <Link href="/blog/domain-driven-design-in-dot-net-from-concept-to-implementation" className="text-purple-600 hover:underline text-sm">Read more →</Link>
               </div>
             </AnimatedSection>
 
@@ -169,8 +169,8 @@ export default function Home() {
             delay={0.5}
             className="text-center mt-12"
           >
-            <Link href="/blog" className="inline-flex items-center text-primary hover:text-primary-dark transition-colors group">
-              <span className="text-lg font-medium">Tất cả bài viết</span>
+            <Link href="/blog" className="inline-flex items-center text-purple-600 hover:text-primary-dark transition-colors group">
+              <span className="text-lg font-medium">View All Blogs</span>
               <span className="ml-2 transform group-hover:translate-x-1 transition-transform">
                 <FiArrowRight className="w-5 h-5" />
               </span>

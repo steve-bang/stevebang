@@ -116,6 +116,7 @@ function addJsonLd(post: BlogPost) {
   };
 }
 
+
 export default async function BlogPostPage({ params }: BlogPostPageProps) {
   const { slug } = await params
 
@@ -142,7 +143,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
             className="inline-flex items-center text-gray-600 hover:text-primary transition-colors"
           >
             <FiArrowLeft className="mr-2" />
-            Trở về
+            Back to Blog
           </Link>
         </nav>
 

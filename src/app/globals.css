@@ -111,19 +111,13 @@
   --duration-500: 500ms;
   --duration-700: 700ms;
   --duration-1000: 1000ms;
-
-  /* Font Families */
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-mono: ui-monospace, Menlo, Monaco, 'Cascadia Mono', 'Segoe UI Mono', 
-              'Roboto Mono', 'Oxygen Mono', 'Ubuntu Monospace', 'Source Code Pro',
-              'Fira Mono', 'Droid Sans Mono', 'Courier New', monospace;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-mono);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -148,24 +142,21 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-sans);
-  line-height: var(--leading-normal);
+  font-family: Arial, Helvetica, sans-serif;
 }
 
 
-/* Markdown Content Styles */
 .markdown-content {
   max-width: 100%;
-  line-height: var(--leading-relaxed);
+  line-height: 1.7;
 }
 
-/* Headings */
 .markdown-content h1, h1 {
   font-size: 2.2rem;
-  font-weight: var(--font-bold);
+  font-weight: 700;
   margin: 2.5rem 0 1.2rem 0;
   line-height: 1.2;
-  color: var(--foreground);
+  color: #2e2e2e;
   letter-spacing: -0.01em;
 }
 
@@ -177,49 +168,8 @@ body {
   @apply text-xl font-bold mt-6 mb-3;
 }
 
-/* Paragraphs */
 .markdown-content p {
-  @apply mb-4 text-gray-700 dark:text-gray-300 leading-relaxed;
-}
-
-/* Links */
-.markdown-content a {
-  @apply text-blue-600 hover:underline;
-}
-
-/* Images */
-.markdown-content img {
-  @apply rounded-lg my-6 max-w-full h-auto;
-}
-
-/* Tables */
-.markdown-content table {
-  @apply w-full my-6 border-collapse;
-}
-
-.markdown-content thead {
-  @apply bg-gray-50 dark:bg-gray-800;
-}
-
-.markdown-content th {
-  @apply px-4 py-3 text-left font-semibold text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700;
-}
-
-.markdown-content td {
-  @apply px-4 py-3 border-b border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300;
-}
-
-.markdown-content tr:last-child td {
-  @apply border-b-0;
-}
-
-.markdown-content tr:hover td {
-  @apply bg-gray-50 dark:bg-gray-800/50;
-}
-
-/* Blockquotes */
-.markdown-content blockquote {
-  @apply border-l-4 border-gray-300 dark:border-gray-600 pl-4 italic text-gray-600 dark:text-gray-400 my-6;
+  @apply mb-4 text-gray-700 leading-relaxed;
 }
 
 .markdown-content ul, .markdown-content ol {
@@ -227,141 +177,48 @@ body {
 }
 
 .markdown-content li {
-  @apply relative mb-3 pl-5 text-gray-700 dark:text-gray-300;
-  list-style-type: none;
+  @apply mb-2;
 }
 
+.markdown-content a {
+  @apply text-blue-600 hover:underline;
+}
 
 .markdown-content img {
   @apply rounded-lg my-6;
 }
 
-/* Code Blocks */
 .markdown-content pre {
-  @apply bg-gray-100 dark:bg-gray-800 p-4 rounded-lg overflow-x-auto my-6;
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  line-height: var(--leading-snug);
-  position: relative;
+  @apply bg-gray-100 p-4 rounded-lg overflow-x-auto my-6;
 }
 
-.markdown-content pre code {
-  @apply bg-transparent p-0 rounded-none;
-  font-family: inherit;
-  font-size: inherit;
-  line-height: inherit;
+.markdown-content code {
+  @apply bg-gray-100 px-2 py-1 rounded text-sm;
 }
 
-/* Language indicator */
-.markdown-content pre::before {
-  content: attr(data-language);
-  @apply absolute top-0 right-0 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs px-2 py-1 rounded-bl-lg rounded-tr-lg;
+.markdown-content table {
+  @apply w-full my-6 border-collapse;
 }
 
-/* Language-specific code block styles */
-.markdown-content pre[data-language="javascript"],
-.markdown-content pre[data-language="js"] {
-  @apply bg-blue-50 dark:bg-blue-900/20;
+.markdown-content thead {
+  @apply bg-gray-50;
 }
 
-.markdown-content pre[data-language="typescript"],
-.markdown-content pre[data-language="ts"] {
-  @apply bg-blue-50 dark:bg-blue-900/20;
+.markdown-content th {
+  @apply px-4 py-3 text-left font-semibold text-gray-700 border-b border-gray-200;
 }
 
-.markdown-content pre[data-language="html"] {
-  @apply bg-orange-50 dark:bg-orange-900/20;
+.markdown-content td {
+  @apply px-4 py-3 border-b border-gray-200 text-gray-700;
 }
 
-.markdown-content pre[data-language="css"] {
-  @apply bg-purple-50 dark:bg-purple-900/20;
+.markdown-content tr:last-child td {
+  @apply border-b-0;
 }
 
-.markdown-content pre[data-language="bash"],
-.markdown-content pre[data-language="shell"] {
-  @apply bg-gray-50 dark:bg-gray-800;
+.markdown-content tr:hover td {
+  @apply bg-gray-50;
 }
-
-.markdown-content pre[data-language="json"] {
-  @apply bg-green-50 dark:bg-green-900/20;
-}
-
-.markdown-content pre[data-language="python"],
-.markdown-content pre[data-language="py"] {
-  @apply bg-yellow-50 dark:bg-yellow-900/20;
-}
-
-/* Syntax highlighting tokens */
-.markdown-content .token.comment,
-.markdown-content .token.prolog,
-.markdown-content .token.doctype,
-.markdown-content .token.cdata {
-  @apply text-gray-500 dark:text-gray-400;
-}
-
-.markdown-content .token.punctuation {
-  @apply text-gray-700 dark:text-gray-300;
-}
-
-.markdown-content .token.property,
-.markdown-content .token.tag,
-.markdown-content .token.boolean,
-.markdown-content .token.number,
-.markdown-content .token.constant,
-.markdown-content .token.symbol,
-.markdown-content .token.deleted {
-  @apply text-blue-600 dark:text-blue-400;
-}
-
-.markdown-content .token.selector,
-.markdown-content .token.attr-name,
-.markdown-content .token.string,
-.markdown-content .token.char,
-.markdown-content .token.builtin,
-.markdown-content .token.inserted {
-  @apply text-green-600 dark:text-green-400;
-}
-
-.markdown-content .token.operator,
-.markdown-content .token.entity,
-.markdown-content .token.url,
-.markdown-content .language-css .token.string,
-.markdown-content .style .token.string {
-  @apply text-yellow-600 dark:text-yellow-400;
-}
-
-.markdown-content .token.atrule,
-.markdown-content .token.attr-value,
-.markdown-content .token.keyword {
-  @apply text-purple-600 dark:text-purple-400;
-}
-
-.markdown-content .token.function,
-.markdown-content .token.class-name {
-  @apply text-pink-600 dark:text-pink-400;
-}
-
-.markdown-content .token.regex,
-.markdown-content .token.important,
-.markdown-content .token.variable {
-  @apply text-orange-600 dark:text-orange-400;
-}
-
-/* Line numbers */
-.markdown-content pre[data-line-numbers] {
-  counter-reset: line;
-}
-
-.markdown-content pre[data-line-numbers] > code > span {
-  counter-increment: line;
-}
-
-.markdown-content pre[data-line-numbers] > code > span::before {
-  content: counter(line);
-  @apply inline-block w-8 text-right mr-4 text-gray-400 dark:text-gray-500;
-}
-
-
 
 /* Responsive tables */
 @media (max-width: 640px) {

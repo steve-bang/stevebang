@@ -12,7 +12,7 @@ export default function Footer() {
               <Logo />
             </Link>
             <p className="mt-4 text-gray-600 max-w-md">
-              Chia sẻ kiến thức lập trình đến tất cả mọi người một cách dễ hiểu, dễ tiếp cận, thực tiễn và truyền cảm hứng cho cộng đồng.
+              Sharing software engineering experiences and insights to help developers grow.
             </p>
             <div className="flex space-x-4 mt-6">
               <Link href="https://github.com/steve-bang" className="text-gray-600 hover:text-primary transition-colors" target='_blank'>
@@ -30,16 +30,16 @@ export default function Footer() {
             <h3 className="text-lg font-semibold mb-4">Quick Links</h3>
             <ul className="space-y-2">
               <li>
-                <Link href="/" className="text-gray-600 hover:text-primary transition-colors">Trang chủ</Link>
+                <Link href="/" className="text-gray-600 hover:text-primary transition-colors">Home</Link>
               </li>
               <li>
-                <Link href="/blog" className="text-gray-600 hover:text-primary transition-colors">Bài viết</Link>
+                <Link href="/blog" className="text-gray-600 hover:text-primary transition-colors">Blog</Link>
               </li>
               <li>
-                <Link href="/projects" className="text-gray-600 hover:text-primary transition-colors">Dự án</Link>
+                <Link href="/projects" className="text-gray-600 hover:text-primary transition-colors">Projects</Link>
               </li>
               <li>
-                <Link href="/about" className="text-gray-600 hover:text-primary transition-colors">Về chúng tôi</Link>
+                <Link href="/about" className="text-gray-600 hover:text-primary transition-colors">About</Link>
               </li>
             </ul>
           </div>

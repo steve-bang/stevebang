@@ -46,7 +46,7 @@ export default function BlogCard({ post }: BlogCardProps) {
         <p className="text-gray-600 text-sm mb-4">{post.description}</p>
         <div className="flex items-center justify-between text-sm text-gray-500">
           {/* <span>{post.author}</span> */}
-          <Link href={`/blog/${post.slug}`} className="text-primary hover:underline text-sm">Đọc thêm →</Link>
+          <Link href={`/blog/${post.slug}`} className="text-purple-600 hover:underline text-sm">Read more →</Link>
           <time dateTime={post.date}>
             {format(new Date(post.date), 'MMM d, yyyy')}
           </time>

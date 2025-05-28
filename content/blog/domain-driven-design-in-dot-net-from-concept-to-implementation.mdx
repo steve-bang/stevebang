@@ -1,0 +1,401 @@
+---
+title: "Domain Driven Design in .NET: From Concept to Implementation"
+date: "2024-05-01"
+description: "Explore Domain Driven Design (DDD) in .NET with a detailed guide from architectural thinking to practical implementation using C#. Suitable for all developers looking to design clear, scalable systems."
+tags: [".NET", "Domain Driven Design", ".NET DDD guide", "DDD architecture", "C# DDD example"]
+author: "Steve Bang"
+readingTime: "12 min read"
+image: "/images/domain-driven-design.png"
+---
+## Imagine you open a coffee shop
+You're the owner of a coffee shop. In your mind, you have a model of how the shop operates:
+
+- Customers arrive → Place orders → Baristas prepare → Serve → Payment
+- There are various drink types (coffee, milk tea, juice)
+- Each order can contain multiple items
+- You have staff, invoices, ingredients...
+
+This is precisely the Domain (Business Domain) — the real world you live in and understand best.
+
+# What is Domain Driven Design?
+Domain Driven Design (DDD) is a software design methodology focused on **business logic in .NET applications**, helping you build clear, maintainable, and scalable systems. In this article, we'll explore DDD in .NET from conceptual thinking to practical implementation using C#.
+
+It's not just about writing code that works; it's about writing code that describes your actual coffee shop, containing methods that truly relate to business logic. This makes communication between code and reality easier, clearer, and more extensible.
+
+**DDD guides you to build software by:**
+
+- Focusing on the domain (business):
+    - The domain is the area your software serves, such as education, banking, sales, etc.
+    - DDD encourages you to thoroughly understand that business, sitting down with domain experts to clearly describe each concept, rule, and behavior.
+- Creating a domain model:
+    - This model is the software built based on the understanding of the business.
+    - Each business concept is represented by Entity, Value Object, Service, Aggregate, etc.
+- Using a "common language" (Ubiquitous Language):
+    - Everyone on the team (dev + business) uses the same language to describe the domain.
+    - For example, instead of saying "invoice table," the whole team will use "Order," "Customer," "LineItem" – and this goes directly into the code.
+- Separating business logic from infrastructure:
+    - The domain does not depend on the database, API, UI, etc.
+    - This helps the business logic change flexibly according to requirements without being tied to technical details.
+
+⇒ **Domain Driven Design isn't about writing complex code; it's about writing code that tells the business story. Understand what's happening, assign clear roles, and let each component handle its own responsibilities.**
+
+# DDD Architectural Model
+DDD is typically divided into four main layers:
+
+```diff
++---------------------------+
+|        Presentation       |  ← UI (API, Web, Mobile, etc.)
++---------------------------+
+|     Application Layer     |  ← Business workflow (Use Cases)
++---------------------------+
+|       Domain Layer        |  ← "Backbone" business logic
++---------------------------+
+|   Infrastructure Layer    |  ← Communication with DB, API, file,...
++---------------------------+
+
+```
+## Presentation Layer
+
+**➤ The "user interface" layer where users interact with the system**
+
+This layer can be:
+- Web API (HTTP communication)
+- Web interface (React, Razor, Blazor, etc.)
+- Mobile App (sending HTTP requests)
+- Even Command Line (if applicable)
+
+Main objectives:
+- Receive user input
+- Send input to Application Layer
+- Receive output/result from Application Layer and return it to the user
+
+**Important note:** Presentation Layer DOES NOT handle business logic
+- No direct database calls
+- No complex validation
+- No independent calculations like pricing, taxes, authentication, etc.
+
+Example: If you have an order creation API, you need a Controller layer to receive client requests. This request-handling component is the Presentation Layer. After receiving information, it forwards it to the Application Layer for processing (database storage, email notifications, permission checks, etc.). After completion, results are returned to the Presentation Layer and then to the client.
+
+## Application Layer
+**➤ This is the business workflow coordination layer (Use Case layer).**
+It doesn't contain complex business logic but is responsible for:
+| Main Role                  | Description                                                                 |
+| -------------------------- | --------------------------------------------------------------------------- |
+| ✅ Handling business flow   | Coordinating each step of a "use case" (create order, register account, etc.) |
+| ✅ Communicating with Domain | Calling Aggregates, Services, Repositories in the domain                    |
+| ✅ Communicating with Infrastructure | Sending emails, saving to DB, logging, etc.                     |
+| ✅ Data mapping             | Converting DTO → Domain → DTO                                               |
+
+**👉 The Application Layer acts like a "conductor" orchestrating all other components to ensure smooth system operation 🎼**
+
+**Important note:** What shouldn't be done in the Application Layer?
+- Business rules: These belong in the Domain Layer for reusability & maintainability.
+- Storage logic: Let Infrastructure handle this
+- Validation: Minor validation is acceptable, but Domain Layer should handle precise validation for each business case.
+
+As the main coordinator, the Application Layer handles many tasks like communicating with Domain for logic processing, Infrastructure for data retrieval or email sending, data mapping, throwing exceptions if needed. In short, this layer contains various use cases to coordinate the entire system smoothly.
+
+## Infrastructure Layer
+**➤ This layer provides technical services to other layers (typically Application and Domain).**
+True to its name, this layer handles database interactions, provides Repositories, sends customer emails, logs events, sends notifications, integrates third-party APIs, cloud storage, message queues, etc. Essentially, any backend or low-level processing logic ideally belongs here.
+
+Key responsibilities:
+| Task                      | Description                                                              |
+| ------------------------- | ------------------------------------------------------------------------ |
+| Database connections      | Implementing Repository, UnitOfWork                                      |
+| Email & logging           | Executing technical services like email, logging, notifications          |
+| External system integration | Calling external APIs, queues (RabbitMQ, Kafka), blob storage, etc. |
+| File storage              | Storing images, files, audio, etc.                                       |
+
+**Important note:**
+- Writing business logic in Infrastructure violates architectural principles and reduces reusability
+- Directly calling Infrastructure from Controller is incorrect; it must go through Application Layer
+
+## Domain Layer 
+**➤ This is where core business logic is defined. It reflects how the business operates, independent of technologies like databases or frameworks.**
+
+The Domain is the business field the software addresses. It's the "real world" mirrored in software. Developers model business concepts as source code.
+Examples:
+- For e-commerce: domain is sales – including orders, products, discounts, payments...
+- For language learning apps: domain is education – including students, lessons, scores, certificates...
+
+### Ubiquitous Language
+In DDD, developers and business experts must use the same language. The Domain Layer clearly reflects this.
+| Business expert says                     | Your code model                          |
+| ---------------------------------------- | ---------------------------------------- |
+| "An order contains multiple products"    | Order has a list of OrderItems           |
+| "Total amount is based on quantity and price" | decimal Total => Quantity * Price     |
+| "Order is valid only if it has at least 1 product" | if (Items.Count == 0) throw new... |
+
+In short, real-world business operations should be accurately reflected in code. This is the cornerstone of DDD - keeping all business logic in one place makes maintenance and expansion easier.
+
+One absolute rule you shouldn't violate: **DEPENDENCY ON OTHER LAYERS**
+
+### Core Components in Domain Layer
+
+#### 1. Entity
+Concept
+- Entities are core business entities with unique IDs for identification.
+- Their state can change over time.
+
+Example:
+```
+public class Order
+{
+    public Guid Id { get; private set; }
+    public Guid UserId { get; private set; }
+    public List<OrderItem> Items { get; private set; }
+
+    public void AddItem(Guid productId, int quantity, decimal price)
+    {
+        Items.Add(new OrderItem(productId, quantity, price));
+    }
+}
+```
+
+Order has a unique Id and manages OrderItem list. This is the root Entity (Aggregate Root) of orders.
+
+#### 2. Value Object
+Concept
+- Objects without IDs, representing pure, immutable values.
+- Compared by value, not identity.
+
+Example: User email
+```
+public class Email
+{
+    public string Value { get; }
+
+    public Email(string value)
+    {
+        if (!value.Contains("@")) throw new ArgumentException("Invalid email.");
+        Value = value;
+    }
+
+    public override bool Equals(object? obj) =>
+        obj is Email other && Value == other.Value;
+
+    public override int GetHashCode() => Value.GetHashCode();
+}
+```
+
+
+#### 3. Aggregate & Aggregate Root
+Concept:
+- Aggregates are logical clusters containing closely related Entities and Value Objects.
+- Aggregate Roots are the sole entry points for operations within the Aggregate.
+
+Think of it as a "representative" or "team leader" for a group of related objects - all interactions must go through this leader.
+
+Programming example with Order:
+
+- An Order is the Aggregate Root for a group of OrderItems.
+- To add/remove items, you must go through Order. You can't modify an item directly (this would violate the principle).
+
+Example:
+```
+public class Order // Aggregate Root
+{
+    public Guid Id { get; private set; }
+    private readonly List<OrderItem> _items = new();
+    public IReadOnlyList<OrderItem> Items => _items;
+
+    public void AddItem(Guid productId, int qty, decimal price)
+    {
+        _items.Add(new OrderItem(productId, qty, price));
+    }
+}
+```
+
+```
+public class OrderItem // Child Entity in Aggregate
+{
+    public Guid ProductId { get; }
+    public int Quantity { get; }
+    public decimal Price { get; }
+
+    public OrderItem(Guid productId, int qty, decimal price)
+    {
+        ProductId = productId;
+        Quantity = qty;
+        Price = price;
+    }
+}
+```
+
+Order is the Aggregate Root managing OrderItems. You can't manipulate OrderItems independently outside Order.
+
+A helpful tip: **"All Aggregate Roots are Entities, but not all Entities are Aggregate Roots."**
+
+#### 4. Domain Service
+Concept:
+- Handles business logic that doesn't belong to any single Entity but is still part of the Domain.
+- Keeps Entities clean.
+
+Example: Coupon validation
+```
+public interface IDiscountService
+{
+    bool IsValidCoupon(string couponCode);
+}
+```
+
+DiscountService doesn't belong solely to Order but relates to order placement business.
+
+#### 5. Domain Event
+Concept:
+- Milestones in business processes that help decouple logic.
+- Can trigger emails, log updates, etc.
+
+Example:
+```
+public class OrderCreatedEvent
+{
+    public Guid OrderId { get; }
+    public OrderCreatedEvent(Guid orderId) => OrderId = orderId;
+}
+```
+
+After Order creation, OrderCreatedEvent is published to handle emails or notify other systems.
+
+#### 6. Repository Interface
+Concept:
+- Specifies how to store/retrieve data without technical details (SQL, MongoDB, etc.).
+- Connects Domain and Infrastructure.
+Example:
+```
+public interface IOrderRepository
+{
+    Task<Order?> GetByIdAsync(Guid id);
+    Task SaveAsync(Order order);
+}
+```
+
+In Infrastructure Layer, this interface is implemented using EF Core or any other technology.
+
+## Dependency Rule
+Simply put, the Dependency Rule states: **Source code dependencies must only point inward — from outer layers (like UI, Infrastructure) toward the center (Domain Layer).**
+
+In other words:
+- High-level layers (core, domain) shouldn't know about or depend on outer layers like UI, Database, or Infrastructure.
+- But outer layers (like Data Access, API, UI) can depend on Domain.
+
+Why is this important?
+The Domain Layer contains the most critical business rules. It must be protected from being influenced by external technical details like storage methods, user interfaces, or frameworks.
+
+If Domain Layer depends on external layers:
+- Changing UI or Database becomes difficult without breaking business logic.
+- Code becomes messy and hard to maintain.
+
+Example illustration:
+
+Suppose your application has 3 layers:
+
+1. Presentation Layer (interface, API)
+2. Application Layer (workflow coordination)
+3. Domain Layer (business rules)
+4. Infrastructure Layer (storage, network, files...)
+
+Following dependency rules:
+
+- Presentation Layer can call Application Layer.
+- Application Layer calls Domain Layer.
+- Infrastructure Layer can also call Domain Layer (e.g., repository implementing interface).
+- **Conversely, Domain Layer must not call or know about Presentation or Infrastructure classes.**
+
+# Principles in Domain Driven Design 
+
+## Focus on Domain Principle
+- Always understand the business deeply, focusing on solving core business problems, not technologies or frameworks.
+- Every line of code should aim to solve real-world problems, not unnecessarily complicate the system.
+
+## Ubiquitous Language
+- Everyone in the team (devs, business, testers...) uses a common, consistent language to describe the Domain.
+- Example: "Order", "Customer", "Invoice" must be understood and used consistently throughout the system to avoid misunderstandings.
+
+## Layered Architecture
+- Clearly separate system into layers:
+    - Presentation Layer (interface, API)
+    - Application Layer (business coordination)
+    - Domain Layer (core business rules)
+    - Infrastructure Layer (databases, external services)
+
+- Each layer has distinct responsibilities, limiting complex dependencies.
+
+## Dependency Rule
+- Dependencies only flow inward.
+- Domain Layer must not know about Application, Infrastructure, or Presentation Layers.
+- This protects Domain from unnecessary external changes.
+
+## Proper Use of Aggregates and Aggregate Roots
+- Aggregates are clusters of related Entities.
+- Aggregate Roots are the sole entry points for Aggregate interactions.
+- Never access or modify Entities inside an Aggregate without going through its Root.
+
+## Precise Definition of Entities and Value Objects
+- Entities have unique identities and mutable state.
+- Value Objects have no identity, are defined by attributes, and are immutable.
+- Avoid confusion to maintain clear Domain logic.
+
+## Consistency Boundary
+- Changes affecting an Aggregate must maintain consistency.
+- Prevent "patchy" or contradictory data within Aggregates.
+
+## Modular Design and Bounded Context Separation
+- Divide Domain into separate Bounded Contexts, each with its own language and rules.
+- Helps manage complexity and avoid logic duplication.
+
+# Common Mistakes When Implementing Domain Driven Design
+
+## 1. Misunderstanding or Oversimplifying Domain
+Many think DDD just means organizing code into Entity, Repository, Service layers and calling it DDD.
+
+In reality, DDD is a design philosophy centered on deep business understanding, creating Ubiquitous Language, and accurate Domain modeling—not just file/folder organization.
+
+## 2. Lack of Ubiquitous Language
+Failing to unify terminology between devs and business leads to misunderstandings and Domain Model errors.
+
+Results in hard-to-read code that doesn't reflect actual business.
+
+## 3. Ignoring Bounded Context
+Trying to cram all business logic into a single Domain Model without separating into distinct Bounded Contexts.
+
+Consequence: Domain becomes bloated, hard to maintain, with tangled logic prone to bugs.
+
+## 4. Creating Anemic Domain Models
+Only having property-filled classes without business logic.
+
+Business logic gets pushed to Service or Application Layer, losing DDD's power and making code harder to extend/test.
+
+## 5. Misusing Aggregate Roots
+Using Aggregate Roots incorrectly or creating oversized "God Aggregates," making data updates difficult and hurting performance.
+
+Conversely, overly small Aggregates lead to consistency issues.
+
+## 6. Domain Layer Depending on Infrastructure or UI
+Violating Dependency Rule by letting Domain Layer know about or directly call outer layers.
+
+Reduces reusability and makes Domain harder to test.
+
+## 7. Missing or Misusing Domain Services
+Not separating complex business logic that doesn't belong to Entities or Value Objects into Domain Services.
+
+Business logic becomes scattered and hard to maintain.
+
+## 8. Overfocusing on Technology, Neglecting Business
+Using DDD as a technical tool just to apply patterns/frameworks without truly understanding business needs.
+
+Result: Technically "beautiful" systems that don't meet business requirements.
+
+## 9. Poor or Missing Tests for Domain
+Domain Model is the application's heart, but without good tests, changes easily introduce errors.
+
+## 10. Overcomplicating
+Trying to apply DDD to every project, even small ones, creating unnecessary complexity and slowing progress.
+
+## Conclusion
+Domain Driven Design (DDD) is a crucial software design methodology for building well-structured, maintainable, and scalable .NET applications. When applying DDD in .NET, you can more easily manage business complexity, improve code clarity, and enhance team development efficiency.
+
+This article hopefully gives you clearer understanding of implementing Domain Driven Design (DDD) in real .NET projects, thereby improving software quality and development speed.
+
+If you want to explore advanced DDD techniques for .NET further, feel free to subscribe to our newsletter or read related articles below for the latest knowledge.

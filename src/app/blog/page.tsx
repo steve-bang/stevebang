@@ -66,7 +66,7 @@ export default async function BlogPage({ params }: { params: Promise<{ page?: st
           <div className="text-center mb-16">
             <h1 className="text-4xl font-bold mb-4">Blog</h1>
             <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-              Khám phá các bài viết mới nhất của chúng tôi về phát triển phần mềm, .NET và công nghệ.
+              Explore insights, tutorials, and best practices in .NET development, software architecture, and more.
             </p>
           </div>
 

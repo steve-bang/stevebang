@@ -1,0 +1,339 @@
+---
+title: "MediatR in .NET: A Complete Guide with Real Examples and Clean Architecture"
+date: "2025-05-27"
+description: "Discover how to use MediatR in .NET to implement the Mediator Pattern, reduce dependencies between layers, improve architecture, and make source code easier to maintain. Includes practical examples and optimization tips."
+tags: ["dotnet", "mediatr" , "cqrs", "dependencyinjection", "cleanarchitecture"]
+author: "Steve Bang"
+readingTime: "20 min read"
+image: "/images/mediatr-trong-dot-net-huong-dan-tu-a-den-z-voi-vi-du-thuc-te-va-kien-truc-sach.png"
+---
+# Problem Statement
+In the past, .NET applications – whether small or large – often developed with Controllers directly calling Services, which then called Repositories. This approach is simple but quickly becomes chaotic as the application expands. Controllers become "fat," and many layers depend on each other like a tangled web of logic that is difficult to unravel and test.
+
+We used to think that breaking things down into services was "good architecture." But:
+
+- How do we separate read and write logic?
+- How do we handle complex business workflows like sending emails, logging, creating notifications... without violating the Single Responsibility Principle?
+- How do we test without mocking an entire set of Services?
+
+The answer comes from an old but powerfully revived design pattern: the Mediator Pattern – and in .NET, we have MediatR.
+
+The **Mediator Pattern** emerged as a solution to reduce dependencies between objects, making the source code cleaner and easier to maintain.
+
+In .NET, the **MediatR** library is a popular and powerful implementation of this design pattern. Let's explore it!
+
+
+# What is the Mediator Pattern?
+
+Mediator is a design pattern belonging to the **Behavioral Pattern** group, acting as an "intermediary" that helps objects in the system communicate with each other without needing to know explicitly about each other.
+
+Instead of `Class A` directly calling `Class B`, `Class A` sends a message/request to the `Mediator`, which then forwards it to the corresponding Handler for processing within the system, and only the result is returned.
+
+
+# MediatR – Implementing Mediator in .NET
+
+## Installation
+MediatR can be easily installed via NuGet:
+```
+dotnet add package MediatR.Extensions.Microsoft.DependencyInjection
+```
+
+Register MediatR in Program.cs
+```
+builder.Services.AddMediatR(cfg => 
+    cfg.RegisterServicesFromAssembly(typeof(Program).Assembly));
+```
+
+## Basic Structure of MediatR
+Suppose you have a simple feature: Get user information by ID.
+### 1. Request (Query)
+``` 
+public record GetUserByIdQuery(Guid Id) : IRequest<UserDto>;
+```
+
+### 2. Handler 
+```
+public class GetUserByIdHandler : IRequestHandler<GetUserByIdQuery, UserDto>
+{
+    private readonly IUserRepository _userRepo;
+
+    public GetUserByIdHandler(IUserRepository userRepo)
+    {
+        _userRepo = userRepo;
+    }
+
+    public async Task<UserDto> Handle(GetUserByIdQuery request, CancellationToken cancellationToken)
+    {
+        var user = await _userRepo.GetByIdAsync(request.Id);
+        return new UserDto(user.Id, user.Name);
+    }
+}
+```
+
+### 3. Calling in Controller
+```
+
+[ApiController]
+[Route("api/users")]
+public class UsersController : ControllerBase
+{
+    private readonly IMediator _mediator;
+
+    public UsersController(IMediator mediator)
+    {
+        _mediator = mediator;
+    }
+
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetById(int id)
+    {
+        var user = await _mediator.Send(new GetUserByIdQuery(id));
+        return Ok(user);
+    }
+}
+
+```
+
+# MediatR and Clean Architecture - A Perfect Pair in .NET Architecture
+
+## What is Clean Architecture?
+Clean Architecture is a software architecture proposed by Robert C. Martin (Uncle Bob). Its goals are:
+
+- Clearly separate layers: Domain (Business Logic), Application (Use Cases), Infrastructure (Database, API), Presentation (Web/API).
+- Ensure independence between components – outer layers can change without affecting the application core.
+- Easy to test, maintain, and extend in the long term.
+
+Structural Model:
+```
+Presentation ──> Application ──> Domain <── Entities
+                         │
+               Infrastructure (DB, Files, APIs)
+```
+
+In the **Application** layer, you have many Use Cases such as:
+- CreateUser
+- UpdateOrder
+- SendInvoiceEmail
+- GetUserById
+
+Each Use Case is an independent piece of logic, but if you manage them by writing everything in a Service or Controller:
+
+- It's hard to manage as the number of Use Cases increases.
+- It's easy to violate the SRP (Single Responsibility Principle).
+- Testing is complex because Services depend on each other.
+
+**So MediatR is the savior.**
+
+MediatR is a .NET library that helps you implement the Mediator Pattern easily:
+
+- Each Use Case will be a Request (e.g., CreateUserCommand) and a separate Handler (CreateUserCommandHandler).
+- All communication between Presentation and Application goes through `IMediator.Send(...)`.
+- There are no more "giant" services; instead, all logic is broken down and encapsulated by purpose.
+
+## In Summary
+
+Thus **MediatR** and **Clean Architecture**  are a perfect combination for modern software development architecture. They help developers build clearer applications with separation of concerns, easy testing, and easy development, especially by reducing mutual dependencies and adhering to the SOLID principles.
+
+# Pipeline Behaviors – Xử lý trung gian nâng cao trong MediatR
+## Pipeline Behaviors là gì?
+
+Trong **MediatR**, ngoài việc xử lý các Request bằng các Handler, bạn còn có thể chèn vào các bước trung gian xử lý logic chung thông qua thứ gọi là Pipeline Behavior.
+Nói cách khác:
+
+**Pipeline Behaviors – Advanced Intermediate Processing in MediatR**
+
+## What are Pipeline Behaviors?
+
+In MediatR, besides handling Requests with Handlers, you can also inject intermediate steps to handle common logic through what are called Pipeline Behaviors.
+
+In other words: Pipeline Behavior = Middleware specific to Request/Response in MediatR.
+
+It works similarly to middleware in ASP.NET Core but only applies within the MediatR processing flow.
+
+Suppose in reality:
+
+- Log all requests & responses
+- Check access permissions (authorization)
+- Validate data using **FluentValidation**
+- Measure the execution time of each handler
+- Catch exceptions and handle them uniformly
+- Add caching for some queries
+
+You `should not` write this logic in each `Handler`, as it would violate the DRY principle and make the code difficult to maintain.
+
+Pipeline Behaviors are the ideal place to solve this problem.
+
+## Structure of a PipelineBehavior
+```
+public class LoggingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
+{
+    private readonly ILogger<LoggingBehavior<TRequest, TResponse>> _logger;
+
+    public LoggingBehavior(ILogger<LoggingBehavior<TRequest, TResponse>> logger)
+    {
+        _logger = logger;
+    }
+
+    public async Task<TResponse> Handle(
+        TRequest request,
+        RequestHandlerDelegate<TResponse> next,
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Handling {RequestName}", typeof(TRequest).Name);
+        var response = await next(); // Call the next handler
+        _logger.LogInformation("Handled {RequestName}", typeof(TRequest).Name);
+        return response;
+    }
+}
+
+```
+
+## How does the Pipeline work?
+
+Suppose I have a `CreateUser` feature. When the following method is called:
+```
+await _mediator.Send(new CreateUserCommand());
+```
+MediatR will do three things:
+- Find all registered `IPipelineBehavior<TRequest, TResponse>`.
+- Build a processing chain (pipeline) based on the registration order of the behaviors.
+- Execute each behavior in a nested order until the Handler is called.
+
+Suppose you have 3 behaviors registered in the following order:
+```
+services.AddTransient(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
+services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
+services.AddTransient(typeof(IPipelineBehavior<,>), typeof(PerformanceBehavior<,>));
+```
+
+The pipeline will then operate as follows:
+```
+LoggingBehavior
+└── ValidationBehavior
+    └── PerformanceBehavior
+        └── CreateUserCommandHandler
+```
+
+# Project Directory Structure
+
+So, after thoroughly understanding MediatR, let's revisit how most older projects would have the following directory structure:
+
+```
+Project
+ ┣ 📂Controllers
+ ┃ ┗ 📄UserController.cs
+ ┣ 📂Services
+ ┃ ┗ 📄UserService.cs
+ ┣ 📂Repositories
+ ┃ ┗ 📄UserRepository.cs
+ ┣ 📂Models
+ ┃ ┗ 📄User.cs
+ ┣ 📂DTOs
+ ┃ ┗ 📄UserDto.cs
+ ┣ 📂ViewModels
+ ┃ ┗ 📄CreateUserViewModel.cs
+ ┗ 📄Program.cs
+```
+
+Limitations:
+- Controller directly calls Service, Service calls Repository.
+- Difficult to control complex business workflows.
+- Difficult to extend or add intermediate processing like logging, validation, etc.
+- Each feature is scattered across multiple folders – hard to track end-to-end.
+
+**After applying MediatR + Clean Architecture (Feature-Based)**
+```
+Project
+ ┣ 📂Features
+ ┃ ┗ 📂Users
+ ┃   ┣ 📂Commands
+ ┃   ┃ ┗ 📂CreateUser
+ ┃   ┃   ┣ 📄CreateUserCommand.cs
+ ┃   ┃   ┣ 📄CreateUserCommandHandler.cs
+ ┃   ┃   ┣ 📄CreateUserValidator.cs
+ ┃   ┣ 📂Queries
+ ┃   ┃ ┗ 📂GetUserById
+ ┃   ┃   ┣ 📄GetUserByIdQuery.cs
+ ┃   ┃   ┣ 📄GetUserByIdQueryHandler.cs
+ ┃   ┣ 📂Dtos
+ ┃   ┃ ┗ 📄UserDto.cs
+ ┃   ┣ 📂Events
+ ┃   ┃ ┣ 📄UserCreatedEvent.cs
+ ┃   ┃ ┗ 📄UserCreatedEventHandler.cs
+ ┃   ┣ 📂Notifications
+ ┃   ┃ ┣ 📄SendWelcomeEmailNotification.cs
+ ┃   ┃ ┗ 📄SendWelcomeEmailHandler.cs
+ ┃   ┗ 📂Authorization
+ ┃       ┗ 📄CreateUserAuthorizationHandler.cs
+ ┣ 📂Shared
+ ┃ ┣ 📂Behaviors
+ ┃ ┃ ┣ 📄LoggingBehavior.cs
+ ┃ ┃ ┣ 📄ValidationBehavior.cs
+ ┃ ┃ ┣ 📄PerformanceBehavior.cs
+ ┃ ┃ ┣ 📄AuthorizationBehavior.cs
+ ┃ ┃ ┗ 📄CachingBehavior.cs
+ ┣ 📂Infrastructure
+ ┃ ┗ 📂Persistence
+ ┃     ┗ 📄UserRepository.cs
+ ┣ 📂Controllers
+ ┃ ┗ 📄UserController.cs
+ ┗ 📄Program.cs
+```
+
+Let's review the highlights after applying this structure:
+| Advantages                        | Description                                                                            |
+| ------------------------------ | ---------------------------------------------------------------------------------- |
+| **Feature-Based**           | Each feature like "User" has its own folder, easy to find and expand.                     |
+| **CQRS rõ ràng**            | Commands = Write, Queries = Read are clearly separated.             |
+| **Plug-and-play behaviors** | Logging, Validation, Exception, Performance can be reused throughout the system. |
+| **Dễ test**                 | Separate handlers, easy to write unit tests for each command/query.                    |
+| **Controller mỏng nhẹ**     | Only responsible for receiving requests and calling _mediator.Send(...).                         |
+| **Mở rộng dễ dàng**         | Just add new Commands/Queries without affecting the overall architecture.                |
+
+
+## Role of Folders
+### 1. Features
+The main folder to organize by each feature of the application. Each feature contains smaller parts such as separate commands, queries, events, notifications, and authorization.
+
+- **Commands**: Contains commands for data modification operations (Create, Update, Delete).
+- **Queries**: Contains queries to retrieve data, without causing system state changes.
+- **Dtos**: Data Transfer Objects used to exchange data between layers, helping to separate from Entities.
+- **Events**: Stores domain events like UserCreatedEvent to react after an action occurs.
+- **Notifications**: Sends signals (notifications) to other parts of the system (email, message, push notification).
+- **Authorization**: Handles authorization, checks permissions before executing a command or query.
+
+### 2. Shared
+Contains components shared across the entire application, especially MediatR's pipeline behaviors (intermediate processing).
+
+Behaviors:
+These are middleware-style pipeline processing classes that run before and after the Handler processes a request.
+For example:
+
+- **LoggingBehavior**: Logs requests and responses.
+- **ValidationBehavior**: Checks the validity of a request before processing.
+- **PerformanceBehavior**: Measures request processing time.
+- **AuthorizationBehavior**: Checks access permissions for a request.
+- **CachingBehavior**: Caches query results to improve performance.
+
+### 3. Infrastructure
+The outer layer handles technical tasks or interactions with the outside world.
+
+Persistence:
+The folder containing Repository classes, DbContext, or other storage techniques (Entity Framework, Dapper, etc.).
+This is where direct interaction with the database occurs, called from handlers or services.
+
+### 4. Controllers
+ASP.NET Core Controller classes responsible for receiving HTTP requests and forwarding them to MediatR using _mediator.Send(...).
+
+Controllers should be kept lean, containing no business logic but only the task of forwarding requests.
+
+# Tổng kết 
+MediatR is not just a library that supports the **Mediator** pattern in .NET, but also a powerful tool to help you build applications following **Clean Architecture** – clearly separating responsibilities, enhancing scalability and maintainability.
+
+Applying MediatR along with specialized folders like Events, Notifications, Authorization, Behaviors... allows you to organize source code in a modular way, easy to manage, test, and develop.
+
+In particular, **Pipeline Behaviors** help you handle cross-cutting concerns like **validation**, **authorization**, **logging**, and **caching** in a centralized manner, avoiding repetition and increasing consistency throughout the application.
+
+You will feel the flexibility when building new features or changing business requirements without affecting the rest of the system. This is the key to sustainable, professional software development in large and complex project environments.
+
+If you haven't started using MediatR, try it today to experience the difference in code organization and optimize your .NET development process!

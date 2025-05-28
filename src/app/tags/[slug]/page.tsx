@@ -33,7 +33,7 @@ export default async function TagPage({ params }: TagPageProps) {
               <h2 className="text-xl font-semibold mb-2">{post.title}</h2>
               <p className="text-gray-600 mb-2">{post.description}</p>
               <p className="text-sm text-gray-500">By {post.author} on {format(new Date(post.date), 'MMMM d, yyyy')}</p>
-              <Link href={`/blog/${post.slug}`} className="text-blue-500 hover:underline">Đọc thêm</Link>
+              <Link href={`/blog/${post.slug}`} className="text-purple-600 hover:underline">Read more</Link>
             </div>
           </div>
         ))}
