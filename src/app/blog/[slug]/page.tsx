@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { FiArrowLeft } from 'react-icons/fi';
 import Image from 'next/image';
 import remarkGfm from 'remark-gfm';
+import { url } from 'inspector';
 
 interface BlogPost {
   slug: string;
@@ -40,8 +41,11 @@ export async function generateMetadata({ params }: BlogPostPageProps) {
   const metadata = {
     title: `${post.title} - Steve Bang`,
     description: post.description,
+    keywords: post.tags.join(', '),
+    authors: [{ name: post.author, url: 'https://www.steve-bang.com/about' }],
+    creator: 'Steve Bang',
     alternates: {
-      canonical: `https://www.steve-bang.com/blog/${slug}`
+      canonical: `https://www.steve-bang.com/blog/${slug}`,
     },
     openGraph: {
       title: post.title,
@@ -51,6 +55,8 @@ export async function generateMetadata({ params }: BlogPostPageProps) {
       modifiedTime: post.date,
       authors: [post.author],
       tags: post.tags,
+      url: `https://www.steve-bang.com/blog/${slug}`,
+      siteName: 'Steve Bang',
       images: [
         {
           url: post.image || '/default-og-image.jpg',
@@ -67,7 +73,7 @@ export async function generateMetadata({ params }: BlogPostPageProps) {
       creator: '@steve-bang',
       images: [post.image || '/default-twitter-image.jpg'],
     },
-    robots: 'index, follow',
+    robots: 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1',
   };
 
   return metadata;
