@@ -7,6 +7,6 @@ export default function robots(): MetadataRoute.Robots {
       allow: '/',
       disallow: ['/private/', '/admin/'],
     },
-    sitemap: 'https://steve-bang.com/sitemap.xml',
+    sitemap: 'https://wwww.steve-bang.com/sitemap.xml',
   }
 } 

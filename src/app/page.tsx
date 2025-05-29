@@ -138,6 +138,29 @@ export default function Home() {
               </div>
             </AnimatedSection>
 
+            <AnimatedSection
+              whileInView={{ opacity: 1, y: 0 }}
+              delay={0.2}
+              whileHover={{ y: -10 }}
+              className="bg-white rounded-lg shadow-sm overflow-hidden transition-all duration-200 max-w-sm mx-auto"
+            >
+              <Image
+                src="/images/caching-in-dotnet-best-practices.png"
+                alt="Featured post image"
+                width={400}
+                height={250}
+                className="w-full h-40 object-cover"
+              />
+              <div className="p-4">
+                <div className="flex items-center space-x-2 mb-3">
+                  <span className="bg-primary bg-opacity-10 text-primary px-2.5 py-0.5 rounded-full text-xs">Caching</span>
+                </div>
+                <h3 className="text-lg font-semibold mb-2">Mastering Caching in .NET: Ultimate Guide to Blazing Fast, Scalable, and Cost-Effective Applications</h3>
+                <p className="text-gray-600 text-sm mb-3">A practical guide to high-performance .NET caching: strategies, patterns, and real-world tips...</p>
+                <Link href="/blog/domain-driven-design-in-dot-net-from-concept-to-implementation" className="text-purple-600 hover:underline text-sm">Read more →</Link>
+              </div>
+            </AnimatedSection>
+
             {/* Featured Post 3 */}
             {/* <AnimatedSection 
               whileInView={{ opacity: 1, y: 0 }}
