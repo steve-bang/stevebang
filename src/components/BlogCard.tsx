@@ -16,44 +16,34 @@ interface BlogCardProps {
 
 export default function BlogCard({ post }: BlogCardProps) {
   return (
-    <article className="bg-white rounded-lg shadow-sm overflow-hidden hover:transform hover:-translate-y-1 transition-all duration-200">
-      {post.image && (
-        <Image
-          src={post.image}
-          alt={post.title}
-          className="w-full h-48 object-cover"
-          width={400}
-          height={192}
-        />
-      )}
-      <div className="p-6">
-        {/* <div className="flex items-center space-x-2 mb-3">
-          {post.tags.map((tag) => (
-            <span
-              key={tag}
-              className="bg-primary bg-opacity-10 text-primary px-2.5 py-0.5 rounded-full text-xs"
-            >
-              {tag}
-            </span>
-          ))}
-          <span className="text-gray-500 text-xs">{post.readingTime}</span>
-        </div> */}
-        <h2 className="text-xl font-semibold mb-2">
-          <Link href={`/blog/${post.slug}`} className="hover:text-primary transition-colors">
+    <article className="bg-white rounded-lg shadow-sm overflow-hidden hover:transform hover:-translate-y-1 transition-all duration-200 cursor-pointer">
+      <Link href={`/blog/${post.slug}`} className="hover:text-primary transition-colors">
+        {post.image && (
+          <Image
+            src={post.image}
+            alt={post.title}
+            className="w-full h-48 object-cover"
+            width={400}
+            height={192}
+          />
+        )}
+        <div className="p-6">
+          <h2 className="text-xl font-semibold mb-2 line-clamp-3" title={post.title}>
             {post.title}
-          </Link>
-        </h2>
-        <p className="text-gray-600 text-sm mb-4">{post.description}</p>
-        <div className="flex items-center justify-between text-sm text-gray-500">
-          {/* <span>{post.author}</span> */}
-          <Link href={`/blog/${post.slug}`} className="text-purple-600 hover:underline text-sm">Read more →</Link>
-          <time dateTime={post.date}>
-            {format(new Date(post.date), 'MMM d, yyyy')}
-          </time>
+          </h2>
+          <p className="text-gray-600 text-sm mb-4 line-clamp-5" title={post.description}>
+            {post.description}
+          </p>
+          <div className="flex items-center justify-between text-sm text-gray-500">
+            {/* <span>{post.author}</span> */}
+            <span className="text-purple-600 hover:underline text-sm">Read more →</span>
+            <time dateTime={post.date}>
+              {format(new Date(post.date), 'MMM d, yyyy')}
+            </time>
+          </div>
 
         </div>
-
-      </div>
+      </Link>
     </article>
   );
 } 

@@ -98,21 +98,23 @@ export default function Home() {
               whileHover={{ y: -10 }}
               className="bg-white rounded-lg shadow-sm overflow-hidden transition-all duration-200 max-w-sm mx-auto"
             >
-              <Image
-                src="/images/mediatr-trong-dot-net-huong-dan-tu-a-den-z-voi-vi-du-thuc-te-va-kien-truc-sach.png"
-                alt="Featured post image"
-                width={400}
-                height={250}
-                className="w-full h-40 object-cover"
-              />
-              <div className="p-4">
-                <div className="flex items-center space-x-2 mb-3">
-                  <span className="bg-primary bg-opacity-10 text-primary px-2.5 py-0.5 rounded-full text-xs">.NET, MediatR</span>
+              <Link href="/blog/mediatR-in-dot-net-a-complete-guide-with-real-examples-and-clean-architecture">
+                <Image
+                  src="/images/mediatr-trong-dot-net-huong-dan-tu-a-den-z-voi-vi-du-thuc-te-va-kien-truc-sach.png"
+                  alt="Featured post image"
+                  width={400}
+                  height={250}
+                  className="w-full h-40 object-cover"
+                />
+                <div className="p-4">
+                  <div className="flex items-center space-x-2 mb-3">
+                    <span className="bg-primary bg-opacity-10 text-primary px-2.5 py-0.5 rounded-full text-xs">.NET, MediatR</span>
+                  </div>
+                  <h3 className="text-lg font-semibold mb-2 line-clamp-3">MediatR in .NET: A Complete Guide with Real Examples and Clean Architecture</h3>
+                  <p className="text-gray-600 text-sm mb-3 line-clamp-5">Discover how to use MediatR in .NET to implement the Mediator Pattern, reduce dependencies between layers, improve architecture, and make source code easier to maintain. Includes practical examples and optimization tips.</p>
+                  <span className="text-purple-600 hover:underline text-sm">Read more →</span>
                 </div>
-                <h3 className="text-lg font-semibold mb-2">MediatR in .NET: A Complete Guide with Real Examples and Clean Architecture</h3>
-                <p className="text-gray-600 text-sm mb-3">Discover how to use MediatR in .NET to implement the Mediator Pattern, reduce dependencies between layers,...</p>
-                <Link href="/blog/mediatR-in-dot-net-a-complete-guide-with-real-examples-and-clean-architecture" className="text-purple-600 hover:underline text-sm">Read more →</Link>
-              </div>
+              </Link>
             </AnimatedSection>
 
             <AnimatedSection
@@ -121,21 +123,23 @@ export default function Home() {
               whileHover={{ y: -10 }}
               className="bg-white rounded-lg shadow-sm overflow-hidden transition-all duration-200 max-w-sm mx-auto"
             >
-              <Image
-                src="/images/domain-driven-design.png"
-                alt="Featured post image"
-                width={400}
-                height={250}
-                className="w-full h-40 object-cover"
-              />
-              <div className="p-4">
-                <div className="flex items-center space-x-2 mb-3">
-                  <span className="bg-primary bg-opacity-10 text-primary px-2.5 py-0.5 rounded-full text-xs">.NET</span>
+              <Link href="/blog/domain-driven-design-in-dot-net-from-concept-to-implementation">
+                <Image
+                  src="/images/domain-driven-design.png"
+                  alt="Featured post image"
+                  width={400}
+                  height={250}
+                  className="w-full h-40 object-cover"
+                />
+                <div className="p-4">
+                  <div className="flex items-center space-x-2 mb-3">
+                    <span className="bg-primary bg-opacity-10 text-primary px-2.5 py-0.5 rounded-full text-xs">.NET</span>
+                  </div>
+                  <h3 className="text-lg font-semibold mb-2 line-clamp-3">Domain Driven Design in .NET: From Concept to Implementation</h3>
+                  <p className="text-gray-600 text-sm mb-3 line-clamp-5">Explore Domain Driven Design (DDD) in .NET with a detailed guide from architectural thinking to practical implementation using C#. Suitable for all developers looking to design clear, scalable systems.</p>
+                  <span className="text-purple-600 hover:underline text-sm">Read more →</span>
                 </div>
-                <h3 className="text-lg font-semibold mb-2">Domain Driven Design in .NET: From Concept to Implementation</h3>
-                <p className="text-gray-600 text-sm mb-3">Explore Domain Driven Design (DDD) in .NET with a detailed guide from architectural...</p>
-                <Link href="/blog/domain-driven-design-in-dot-net-from-concept-to-implementation" className="text-purple-600 hover:underline text-sm">Read more →</Link>
-              </div>
+              </Link>
             </AnimatedSection>
 
             <AnimatedSection
@@ -144,21 +148,23 @@ export default function Home() {
               whileHover={{ y: -10 }}
               className="bg-white rounded-lg shadow-sm overflow-hidden transition-all duration-200 max-w-sm mx-auto"
             >
-              <Image
-                src="/images/caching-in-dotnet-best-practices.png"
-                alt="Featured post image"
-                width={400}
-                height={250}
-                className="w-full h-40 object-cover"
-              />
-              <div className="p-4">
-                <div className="flex items-center space-x-2 mb-3">
-                  <span className="bg-primary bg-opacity-10 text-primary px-2.5 py-0.5 rounded-full text-xs">Caching</span>
+              <Link href="/blog/domain-driven-design-in-dot-net-from-concept-to-implementation">
+                <Image
+                  src="/images/caching-in-dotnet-best-practices.png"
+                  alt="Featured post image"
+                  width={400}
+                  height={250}
+                  className="w-full h-40 object-cover"
+                />
+                <div className="p-4">
+                  <div className="flex items-center space-x-2 mb-3">
+                    <span className="bg-primary bg-opacity-10 text-primary px-2.5 py-0.5 rounded-full text-xs">Caching</span>
+                  </div>
+                  <h3 className="text-lg font-semibold mb-2 line-clamp-3">Mastering Caching in .NET: Ultimate Guide to Blazing Fast, Scalable, and Cost-Effective Applications</h3>
+                  <p className="text-gray-600 text-sm mb-3 line-clamp-5">A practical guide to high-performance .NET caching: strategies, patterns, and real-world tips for ASP.NET Core, Redis, and distributed caching.</p>
+                  <span className="text-purple-600 hover:underline text-sm">Read more →</span>
                 </div>
-                <h3 className="text-lg font-semibold mb-2">Mastering Caching in .NET: Ultimate Guide to Blazing Fast, Scalable, and Cost-Effective Applications</h3>
-                <p className="text-gray-600 text-sm mb-3">A practical guide to high-performance .NET caching: strategies, patterns, and real-world tips...</p>
-                <Link href="/blog/domain-driven-design-in-dot-net-from-concept-to-implementation" className="text-purple-600 hover:underline text-sm">Read more →</Link>
-              </div>
+              </Link>
             </AnimatedSection>
 
             {/* Featured Post 3 */}
