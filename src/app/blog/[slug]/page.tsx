@@ -6,7 +6,6 @@ import Link from 'next/link';
 import { FiArrowLeft } from 'react-icons/fi';
 import Image from 'next/image';
 import remarkGfm from 'remark-gfm';
-import { url } from 'inspector';
 
 interface BlogPost {
   slug: string;
