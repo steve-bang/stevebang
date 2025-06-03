@@ -4,7 +4,6 @@ import "./globals.css";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { GoogleAnalytics } from '@next/third-parties/google'
-import Head from "next/head";
 import GoogleAdSense from "@/components/GoogleAdSense";
 
 
@@ -48,9 +47,6 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <Head>
-        <GoogleAdSense pId={process.env.NEXT_PUBLIC_GOOGLE_ADSENSE || ""} />
-      </Head>
       <body className={inter.className}>
         <Navbar />
         <main className="min-h-screen bg-gray-50">
@@ -58,6 +54,7 @@ export default function RootLayout({
         </main>
         <Footer />
         <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GOOGLE_ANALYTICS || ""} />
+        <GoogleAdSense pId={process.env.NEXT_PUBLIC_GOOGLE_ADSENSE || ""} />
       </body>
     </html>
   );
