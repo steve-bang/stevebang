@@ -4,6 +4,8 @@ import "./globals.css";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { GoogleAnalytics } from '@next/third-parties/google'
+import Head from "next/head";
+import GoogleAdSense from "@/components/GoogleAdSense";
 
 
 const inter = Inter({ subsets: ["latin"] });
@@ -36,7 +38,7 @@ export const metadata: Metadata = {
   },
   verification: {
     google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION || "",
-  }
+  },
 };
 
 export default function RootLayout({
@@ -46,6 +48,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
+      <Head>
+        <GoogleAdSense pId={process.env.NEXT_PUBLIC_GOOGLE_ADSENSE || ""} />
+      </Head>
       <body className={inter.className}>
         <Navbar />
         <main className="min-h-screen bg-gray-50">
