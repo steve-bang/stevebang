@@ -210,7 +210,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
         </footer>
       </div>
 
-      <GoogleAdsBanner pId={process.env.NEXT_PUBLIC_GOOGLE_ANALYTICS}  />
+      <GoogleAdsBanner pId={process.env.NEXT_PUBLIC_GOOGLE_ANALYTICS} adSlot='5558650644'  />
     </article>
   );
 }
