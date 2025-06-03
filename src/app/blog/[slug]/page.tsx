@@ -6,7 +6,6 @@ import Link from 'next/link';
 import { FiArrowLeft } from 'react-icons/fi';
 import Image from 'next/image';
 import remarkGfm from 'remark-gfm';
-import dynamic from 'next/dynamic';
 import GoogleAdsBanner from '@/components/GoogleAdsBanner';
 
 interface BlogPost {
@@ -208,10 +207,16 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
               </Link>
             ))}
           </div>
+          
+          <GoogleAdsBanner
+            pId={process.env.NEXT_PUBLIC_GOOGLE_ANALYTICS}
+            adSlot='5558650644'
+            adFormat="auto"
+            fullWidthResponsive={true}
+          />
         </footer>
       </div>
 
-      <GoogleAdsBanner pId={process.env.NEXT_PUBLIC_GOOGLE_ANALYTICS} adSlot='5558650644' />
     </article>
   );
 }
