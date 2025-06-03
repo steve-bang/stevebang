@@ -6,7 +6,7 @@ export interface GoogleAdSenseProps {
 
 const GoogleAdSense = ({ pId }: GoogleAdSenseProps) => {
     return (
-        <Script
+        <script
             async
             src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${pId}`}
             crossOrigin="anonymous"

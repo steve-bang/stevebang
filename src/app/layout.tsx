@@ -47,6 +47,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
+      <head>
+        <GoogleAdSense pId={process.env.NEXT_PUBLIC_GOOGLE_ADSENSE || ""} />
+      </head>
       <body className={inter.className}>
         <Navbar />
         <main className="min-h-screen bg-gray-50">
@@ -54,7 +57,6 @@ export default function RootLayout({
         </main>
         <Footer />
         <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GOOGLE_ANALYTICS || ""} />
-        <GoogleAdSense pId={process.env.NEXT_PUBLIC_GOOGLE_ADSENSE || ""} />
       </body>
     </html>
   );
