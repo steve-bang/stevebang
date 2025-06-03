@@ -6,8 +6,8 @@ import Link from 'next/link';
 import { FiArrowLeft } from 'react-icons/fi';
 import Image from 'next/image';
 import remarkGfm from 'remark-gfm';
-import GoogleAdsBanner from '@/components/GoogleAdsBanner';
 import dynamic from 'next/dynamic';
+import GoogleAdsBanner from '@/components/GoogleAdsBanner';
 
 interface BlogPost {
   slug: string;
@@ -133,10 +133,6 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
     notFound();
   }
 
-  const GoogleAdWrapper = dynamic(() => import('@/components/GoogleAdWrapper'), {
-    ssr: false,
-  });
-
 
   return (
     <article className="pt-32 pb-20">
@@ -215,7 +211,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
         </footer>
       </div>
 
-      <GoogleAdWrapper />
+      <GoogleAdsBanner pId={process.env.NEXT_PUBLIC_GOOGLE_ANALYTICS} adSlot='5558650644' />
     </article>
   );
 }
