@@ -1,32 +1,52 @@
 import { getBlogPosts } from '@/lib/mdx';
 import { MetadataRoute } from 'next'
 
+export interface RouteMap {
+  path: string;
+  date: Date;
+}
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
-  const baseUrl = 'https://www.steve-bang.com'
 
-  const staticRoutes = [
-    '',
-    '/blog',
-    '/about',
-    '/projects',
+  const dobWebsite = new Date('2025-05-01');
+
+  const staticRoutes: RouteMap[] = [
+    {
+      path: '',
+      date: dobWebsite,
+    },
+    {
+      path: 'blog',
+      date: dobWebsite,
+    },
+    {
+      path: 'about',
+      date: dobWebsite,
+    },
+    {
+      path: 'projects',
+      date: dobWebsite,
+    }
   ]
 
   const posts = await getBlogPosts();
-  
-  const postRoutes = posts.map((post) => `/blog/${post.slug}`);
 
-  const routes = [
+  const postRoutes: RouteMap[] = posts.map((post) =>
+    ({ path: `blog/${post.slug}`, date: new Date(post.date) })
+  );
+
+  const routes: RouteMap[] = [
     ...staticRoutes,
     ...postRoutes,
   ]
 
   // Add your static routes
   return routes.map((route) => ({
-    url: `${baseUrl}${route}`,
-    lastModified: new Date(),
+    url: `https://${process.env.NEXT_PUBLIC_DOMAIN}/${route.path}`,
+    lastModified: route.date,
     changeFrequency: 'daily' as const,
-    priority: route === '' ? 1 : 0.8,
+    priority: route.path === '' ? 1 : 0.8,
   }))
 
 } 
