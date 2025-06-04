@@ -134,13 +134,12 @@ MediatR is a .NET library that helps you implement the Mediator Pattern easily:
 
 Thus **MediatR** and **Clean Architecture**  are a perfect combination for modern software development architecture. They help developers build clearer applications with separation of concerns, easy testing, and easy development, especially by reducing mutual dependencies and adhering to the SOLID principles.
 
-# Pipeline Behaviors – Xử lý trung gian nâng cao trong MediatR
-## Pipeline Behaviors là gì?
+# Pipeline Behaviors – Advanced Middleware in MediatR
+## What are Pipeline Behaviors?
 
-Trong **MediatR**, ngoài việc xử lý các Request bằng các Handler, bạn còn có thể chèn vào các bước trung gian xử lý logic chung thông qua thứ gọi là Pipeline Behavior.
-Nói cách khác:
+In MediatR, besides handling each Request with its own Handler, you can also inject intermediate steps to process shared logic through something called Pipeline Behaviors.
 
-**Pipeline Behaviors – Advanced Intermediate Processing in MediatR**
+In other words: Pipeline Behaviors are like middleware, but specific to the MediatR request/response pipeline.
 
 ## What are Pipeline Behaviors?
 
@@ -284,11 +283,11 @@ Let's review the highlights after applying this structure:
 | Advantages                        | Description                                                                            |
 | ------------------------------ | ---------------------------------------------------------------------------------- |
 | **Feature-Based**           | Each feature like "User" has its own folder, easy to find and expand.                     |
-| **CQRS rõ ràng**            | Commands = Write, Queries = Read are clearly separated.             |
+| **Clear CQRS**            | Commands = Write, Queries = Read are clearly separated.             |
 | **Plug-and-play behaviors** | Logging, Validation, Exception, Performance can be reused throughout the system. |
-| **Dễ test**                 | Separate handlers, easy to write unit tests for each command/query.                    |
-| **Controller mỏng nhẹ**     | Only responsible for receiving requests and calling _mediator.Send(...).                         |
-| **Mở rộng dễ dàng**         | Just add new Commands/Queries without affecting the overall architecture.                |
+| **Easy to Test**                 | Separate handlers, easy to write unit tests for each command/query.                    |
+| **Thin Controllers**     | Only responsible for receiving requests and calling _mediator.Send(...).                         |
+| **Easily Extensible**         | Just add new Commands/Queries without affecting the overall architecture.                |
 
 
 ## Role of Folders
@@ -327,7 +326,7 @@ ASP.NET Core Controller classes responsible for receiving HTTP requests and forw
 
 Controllers should be kept lean, containing no business logic but only the task of forwarding requests.
 
-# Tổng kết 
+# In Summary
 MediatR is not just a library that supports the **Mediator** pattern in .NET, but also a powerful tool to help you build applications following **Clean Architecture** – clearly separating responsibilities, enhancing scalability and maintainability.
 
 Applying MediatR along with specialized folders like Events, Notifications, Authorization, Behaviors... allows you to organize source code in a modular way, easy to manage, test, and develop.
