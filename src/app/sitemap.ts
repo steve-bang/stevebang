@@ -14,7 +14,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   const posts = await getBlogPosts();
   
-  const postRoutes = posts.map((post) => {`/blog/${post.slug}`});
+  const postRoutes = posts.map((post) => `/blog/${post.slug}`);
 
   const routes = [
     ...staticRoutes,
