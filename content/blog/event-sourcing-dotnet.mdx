@@ -1,0 +1,331 @@
+---
+title: "Event Sourcing in .NET: A Practical Guide with Real-World Example and Best Practices"
+date: "2025-06-07"
+description: "Learn the event sourcing pattern, its benefits, and how to implement event sourcing in .NET with real-world examples and best practices for scalable, auditable systems."
+tags: [".NET", "event sourcing", "cqrs", "architecture", "patterns", "event-driven", "csharp"]
+author: "Steve Bang"
+readingTime: "12 min read"
+image: "/images/event-sourcing-dotnet.png"
+---
+
+# What is Event Sourcing?
+
+**Event Sourcing** is a powerful architectural pattern in which **state changes** are stored as a **sequence of events**, rather than persisting just the latest snapshot of an object.
+
+Instead of updating the database directly with the latest state, you record immutable events (e.g., `UserRegistered`, `FundsDeposited`) and replay them to build the current state.
+
+**Key Benefits:**
+- **Auditability:** Every change is recorded, making it easy to track history.
+- **Debuggability:** You can replay events to reproduce bugs or investigate issues.
+- **Scalability:** Works well with CQRS and distributed systems.
+- **Flexibility:** Supports temporal queries ("what was the state at time X?") and event-driven integrations.
+
+---
+
+## Context and Problem
+In traditional CRUD-based systems, each update overwrites the previous state, leaving no trace of how or why a change occurred. This makes it difficult to:
+- **Track the full history** of a business process
+- **Debug** complex issues without full context
+- **Audit user actions** for legal or compliance reasons
+- **Rebuild** past states for analytics or business intelligence
+
+Let’s consider a **banking application**: 
+If a user deposits and withdraws money multiple times, a typical system will just store the **latest balance** — but not how the balance changed over time.
+
+❓ What if the user claims, "I never withdrew $200"?
+
+❗️ Without a detailed event log, you're stuck.
+
+**Event Sourcing** solves this by storing each action (deposit, withdrawal, transfer) as an **event** in an append-only log. You can then replay the event history to fully understand what happened — and when.
+
+This approach provides **transparency**, **auditability**, and **flexibility** for modern systems where **trust and traceability** are key requirements.
+
+---
+
+## Event Sourcing vs. Traditional CRUD
+
+| Traditional CRUD                | Event Sourcing                                 |
+|---------------------------------|-----------------------------------------------|
+| Overwrites state                | Appends new events                            |
+| Hard to audit                   | Full history of changes                       |
+| Simple to implement             | More complex, but more powerful               |
+| Data loss on update/delete      | No data loss, all changes are events          |
+
+---
+
+## Core Concepts
+
+- **Event:** An immutable fact describing something that happened (e.g., `UserRegistered`).
+- **Aggregate:** The domain object whose state is built from events (e.g., `Order`).
+- **Event Store:** The database or storage where events are persisted (e.g., SQL, NoSQL, or specialized event stores).
+- **Command:** An action that triggers a state change (e.g., `ShipOrder`).
+- **Projection:** A read model built by replaying events, optimized for queries.
+
+---
+
+## How Event Sourcing Works (Step-by-Step)
+
+1. **Command Received:** The system receives a command (e.g., `PlaceOrder`).
+2. **Aggregate Loads Events:** The aggregate loads its event history from the event store and rebuilds its state.
+3. **Business Logic:** The aggregate validates the command and produces new events (e.g., `OrderPlaced`).
+4. **Persist Events:** The new events are appended to the event store.
+5. **Update Projections:** Projections (read models) are updated by replaying the new events.
+
+---
+
+# Implementing Event Sourcing in .NET
+
+Let's walk through a simple example: an order management system.
+
+### 1. Define Events
+```csharp
+public interface IEvent { DateTime OccurredAt { get; } }
+
+public record OrderCreated(Guid OrderId, string Customer, DateTime OccurredAt) : IEvent;
+public record OrderShipped(Guid OrderId, DateTime OccurredAt) : IEvent;
+```
+
+### 2. Define the Aggregate
+```csharp
+public class OrderAggregate
+{
+    public Guid Id { get; private set; }
+    public string Customer { get; private set; }
+    public bool IsShipped { get; private set; }
+    public List<IEvent> Changes { get; } = new();
+
+    public OrderAggregate(IEnumerable<IEvent> events)
+    {
+        foreach (var e in events) Apply(e);
+    }
+
+    public void Create(Guid id, string customer)
+    {
+        var evt = new OrderCreated(id, customer, DateTime.UtcNow);
+        Apply(evt);
+        Changes.Add(evt);
+    }
+
+    public void Ship()
+    {
+        if (IsShipped) throw new InvalidOperationException("Order already shipped");
+        var evt = new OrderShipped(Id, DateTime.UtcNow);
+        Apply(evt);
+        Changes.Add(evt);
+    }
+
+    private void Apply(IEvent evt)
+    {
+        switch (evt)
+        {
+            case OrderCreated oc:
+                Id = oc.OrderId;
+                Customer = oc.Customer;
+                break;
+            case OrderShipped _:
+                IsShipped = true;
+                break;
+        }
+    }
+}
+```
+
+### 3. Event Store Abstraction
+```csharp
+public interface IEventStore
+{
+    Task<IEnumerable<IEvent>> LoadEventsAsync(Guid aggregateId);
+    Task AppendEventsAsync(Guid aggregateId, IEnumerable<IEvent> events);
+}
+```
+
+### 4. In-Memory Event Store (for learning/demo)
+```
+public class InMemoryEventStore : IEventStore
+{
+    private readonly Dictionary<Guid, List<IDomainEvent>> _eventStreams = new();
+
+    public Task AppendEventsAsync(Guid aggregateId, IEnumerable<IDomainEvent> events)
+    {
+        if (!_eventStreams.ContainsKey(aggregateId))
+            _eventStreams[aggregateId] = new List<IDomainEvent>();
+
+        _eventStreams[aggregateId].AddRange(events);
+    }
+
+    public Task<IEnumerable<IDomainEvent>> LoadEventsAsync(Guid aggregateId)
+    {
+        return _eventStreams.ContainsKey(aggregateId)
+            ? _eventStreams[aggregateId]
+            : new List<IDomainEvent>();
+    }
+}
+```
+
+### 5. Using the Aggregate and Event Store
+```csharp
+// Load events and rebuild aggregate
+var events = await eventStore.LoadEventsAsync(orderId);
+var order = new OrderAggregate(events);
+
+// Handle a command
+order.Ship();
+await eventStore.AppendEventsAsync(order.Id, order.Changes);
+```
+
+---
+
+# How to Combine CQRS and Event Sourcing in .NET?
+
+**CQRS** and **Event Sourcing** complement each other perfectly. CQRS focuses on separating reads and writes, while Event Sourcing focuses on storing state changes as a series of events rather than the current state. Here's how you can bring them together:
+
+## The Architecture Overview
+```
+         +-------------------+             +----------------------+
+ Command |   Command API     |  Writes →   |   Command Handler    |
+         +-------------------+             +----------------------+
+                                                    |
+                                                    v
+                                            +----------------+
+                                            |  Aggregate Root |
+                                            +----------------+
+                                                    |
+                                             Raise Domain Events
+                                                    |
+                                                    v
+        +----------------------+       Save Events   +---------------------+
+        |   Event Store (DB)   | <------------------ |   Event Repository  |
+        +----------------------+                    +---------------------+
+                |
+                |   Publish Events
+                v
+        +----------------------+
+        | Event Handlers       |
+        +----------------------+
+                |
+                v
+     +--------------------------+
+     | Projections / Read Models| → Query API
+     +--------------------------+
+
+```
+**Key Concepts in the Integration**
+| Concept             | Role in CQRS + Event Sourcing                     |
+| ------------------- | ------------------------------------------------- |
+| **Command Handler** | Validates and processes a command.                |
+| **Aggregate Root**  | Encapsulates domain logic and emits events.       |
+| **Event Store**     | Persists emitted domain events.                   |
+| **Event Handler**   | Reacts to events and updates read models.         |
+| **Read Models**     | Optimized views for querying, often denormalized. |
+
+## Sample Implementation Structure
+
+### 1. Write Side (Command Handling + Event Generation)
+```
+public record CreateOrderCommand(Guid OrderId, string CustomerId, decimal Total);
+
+public class CreateOrderCommandHandler : ICommandHandler<CreateOrderCommand>
+{
+    private readonly IEventStore _eventStore;
+
+    public async Task HandleAsync(CreateOrderCommand command)
+    {
+        var order = OrderAggregate.Create(command.OrderId, command.CustomerId, command.Total);
+        await _eventStore.AppendEventsAsync(order.Id, order.Events);
+    }
+}
+```
+
+### 2. Aggregate Root Emits Domain Events
+```
+public class OrderAggregate
+{
+    private List<IEvent> _events = new();
+    public IReadOnlyList<IEvent> Events => _events;
+
+    public static OrderAggregate Create(Guid id, string customerId, decimal total)
+    {
+        var order = new OrderAggregate();
+        order.Apply(new OrderCreatedEvent(id, customerId, total));
+        return order;
+    }
+
+    private void Apply(OrderCreatedEvent e)
+    {
+        // Set state
+        Id = e.OrderId;
+        CustomerId = e.CustomerId;
+        Total = e.Total;
+        _events.Add(e);
+    }
+
+    public Guid Id { get; private set; }
+    public string CustomerId { get; private set; }
+    public decimal Total { get; private set; }
+}
+```
+
+### 3. Read Side (Projection Building)
+```
+public class OrderProjectionHandler : IEventHandler<OrderCreatedEvent>
+{
+    private readonly IOrderReadModelRepository _readRepo;
+
+    public async Task HandleAsync(OrderCreatedEvent e)
+    {
+        var readModel = new OrderReadModel
+        {
+            OrderId = e.OrderId,
+            CustomerId = e.CustomerId,
+            Total = e.Total,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        await _readRepo.InsertAsync(readModel);
+    }
+}
+```
+---
+
+# Best Practices for Event Sourcing in .NET
+
+- **Use immutable events:** Events should never change after being written.
+- **Version your events:** Add a version or schema to support future changes.
+- **Keep events granular:** Each event should represent a single business fact.
+- **Separate write and read models:** Use projections for efficient queries (CQRS).
+- **Handle eventual consistency:** Projections may lag behind the event store.
+- **Test event replay:** Regularly replay events to ensure aggregates and projections work as expected.
+- **Secure your event store:** Protect against unauthorized access and data loss.
+- **Document event contracts:** Make event schemas clear for future maintainers.
+
+---
+
+## When to Use Event Sourcing
+
+- You need a full audit trail or history of changes
+- Your domain is complex and benefits from event-driven design
+- You want to support temporal queries or time travel
+- You are building a CQRS or microservices architecture
+
+**When NOT to use:**
+- Simple CRUD apps with no audit/history requirements
+- Projects where event replay and eventual consistency add unnecessary complexity
+
+---
+
+# Conclusion
+
+Event Sourcing is a powerful pattern for building robust, auditable, and scalable .NET applications. By storing every change as an event, you gain a complete history, enable advanced features, and support modern architectures like CQRS and microservices. Start small, follow best practices, and you'll unlock the full potential of event sourcing in your .NET projects!
+
+Start small — perhaps with a side project — and build confidence with this pattern before applying it to production.
+
+---
+
+# Related Articles on Our Blog
+
+If you found this guide helpful, you might also enjoy these in-depth articles on our website:
+- [Domain Driven Design in .NET: From Concept to Implementation](/blog/domain-driven-design-in-dot-net-from-concept-to-implementation)
+- [MediatR in .NET: A Complete Guide with Real Examples and Clean Architecture](/blog/mediatR-in-dot-net-a-complete-guide-with-real-examples-and-clean-architecture)
+- [Mastering Caching in .NET: Ultimate Guide to Blazing Fast, Scalable, and Cost-Effective Applications](/blog/caching-in-dotnet-best-practices)
+
+Stay tuned for more expert articles to help you master modern .NET architecture and patterns!
