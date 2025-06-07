@@ -41,10 +41,10 @@ export default function Navbar() {
       {isMobileMenuOpen && (
         <div className="md:hidden">
           <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3 bg-white shadow-lg">
-            <Link href="/" className="block px-3 py-2 text-primary font-medium">Trang chủ</Link>
-            <Link href="/blog" className="block px-3 py-2 text-gray-700 hover:text-primary transition-colors">Bài viết</Link>
-            <Link href="/projects" className="block px-3 py-2 text-gray-700 hover:text-primary transition-colors">Dự án</Link>
-            <Link href="/about" className="block px-3 py-2 text-gray-700 hover:text-primary transition-colors">Về chúng tôi</Link>
+            <Link href="/" className="block px-3 py-2 text-primary font-medium">Home</Link>
+            <Link href="/blog" className="block px-3 py-2 text-gray-700 hover:text-primary transition-colors">Blogs</Link>
+            <Link href="/projects" className="block px-3 py-2 text-gray-700 hover:text-primary transition-colors">Projects</Link>
+            <Link href="/about" className="block px-3 py-2 text-gray-700 hover:text-primary transition-colors">About</Link>
             <button className="w-full mt-2 bg-primary text-white px-4 py-2 rounded-lg hover:bg-opacity-90 transition-colors">
               Subscribe
             </button>

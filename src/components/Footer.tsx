@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { FiGithub, FiTwitter, FiLinkedin } from 'react-icons/fi';
 import Logo from '@/components/Logo';
+import Buymeacoffee from './Buymeacoffee';
 
 export default function Footer() {
   return (
@@ -25,6 +26,9 @@ export default function Footer() {
                 <FiLinkedin size={24} />
               </Link>
             </div>
+
+            <Buymeacoffee />
+
           </div>
           <div>
             <h3 className="text-lg font-semibold mb-4">Quick Links</h3>
@@ -61,7 +65,7 @@ export default function Footer() {
             </ul>
           </div>
         </div>
-        <div className="border-t border-gray-200 mt-12 pt-8">
+        <div className="border-t border-gray-200 mt-4 pt-4">
           <p className="text-center text-gray-600">
             © {new Date().getFullYear()} Steve Bang. All rights reserved.
           </p>

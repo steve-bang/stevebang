@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
   images: {
     remotePatterns: [
       {
-        hostname: 'via.placeholder.com',
+        hostname: 'cdn.buymeacoffee.com',
       },
     ],
   },
