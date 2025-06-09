@@ -1,0 +1,190 @@
+---
+title: "What is HashId? Why Should Developers Use HashId to Secure APIs?"
+date: "2025-06-09"
+description: "Discover what HashId is, why it matters for API security, and how developers can use HashId in .NET projects to hide IDs and prevent unauthorized data access."
+tags: [".NET", "HashId", "API Security", "Backend Development", "C#", "Web API", "Security"]
+author: "Steve Bang"
+readingTime: "8 min read"
+image: "/images/what-is-hashid-why-use-to-secure-api.png"
+---
+
+When developing web applications or APIs, exposing real (integer) IDs in URLs such as `/users/10` or `/products/25` can pose several risks:
+
+- Users can easily guess other IDs.
+- Vulnerable to enumeration attacks (ID guessing attacks).
+- Unprofessional in terms of aesthetics or branding.
+
+This is when HashId becomes a “savior” for developers.
+
+# What is HashId?
+
+In web API or ASP.NET application development, using sequential numeric IDs in URLs is common practice. However, this seemingly simple approach can introduce significant security risks and negatively impact user experience.
+
+In this article, we’ll explore **HashId** — a solution that encodes numeric IDs into short, hard-to-guess strings—and show you how to implement HashId effectively in real-world .NET projects.
+
+
+### 1. Vulnerable to IDOR Attacks (Insecure Direct Object Reference)
+
+* Attackers can manually change the ID in the URL to access data that does not belong to them.
+* Example: a user changes `/invoice/1001` → `/invoice/1002` to view someone else’s invoice.
+
+> This is a serious security vulnerability, listed in the **[OWASP Top 10](https://owasp.org/www-project-top-ten/)**.
+
+### 2. Internal Information Disclosure
+
+* Exposes the number of records and growth rate (e.g., `/orders/1200`).
+* Can be exploited for behavior analysis or by competitors.
+
+### 3. Susceptible to Data Enumeration Attacks
+
+* Hackers can automatically try `/users/1` to `/users/9999` to harvest data.
+
+### 4. Unprofessional and Unfriendly URLs
+
+* URLs like `/post/453` look “raw” and unrefined.
+* Hard to remember and lack security.
+
+---
+
+# Solution: What is HashId?
+
+**HashId** is an algorithm that encodes integers into short, random, non-sequential strings, which can be **decoded back on the server side**.
+
+**Example**
+
+| Real ID | HashId |
+| ------- | ------ |
+| 123     | 5vK9q  |
+| 245     | m1nOp  |
+
+→ `/users/123` → `/users/5vK9q`
+
+---
+
+# How to Use HashId in .NET
+
+### 1. Install the Library
+
+```bash
+dotnet add package Hashids.net
+```
+
+### 2. Initialize in C# Code:
+
+```csharp
+var hashids = new Hashids("your_salt_here", 6); // 6 is the minimum length
+var encoded = hashids.Encode(123); // → "5vK9q"
+var decoded = hashids.Decode(encoded); // → [123]
+```
+
+### 3. Real-World Usage in a Controller:
+
+```csharp
+[HttpGet("{hashId}")]
+public IActionResult GetUserByHash(string hashId)
+{
+    var hashids = new Hashids("your_salt", 6);
+    var ids = hashids.Decode(hashId);
+    if (ids.Length == 0) return NotFound();
+
+    var user = _userService.GetById(ids[0]);
+    if (user == null) return NotFound();
+
+    return Ok(user);
+}
+```
+
+---
+
+#  Benefits of HashId
+
+| Benefit                    | Description                                              |
+| -------------------------- | -------------------------------------------------------- |
+| 🔐 Enhanced Security       | Reduces risk of exposing real IDs, prevents ID guessing  |
+| 🧱 Data Structure Hiding   | Hides record counts and internal IDs                     |
+| 🌐 SEO Friendly            | Short, professional URLs                                 |
+| 💼 Increased System Trust  | Users feel more secure when using your system            |
+| 🔄 Easy Integration        | Can be quickly integrated with Web API or MVC            |
+
+---
+
+## Comparing HashId with Other Solutions
+
+### Using Sequential Numeric IDs (int, long)
+
+* Advantages: Simple, high performance, small storage size (4–8 bytes).
+* Disadvantages: Easy to guess, exposes data, not safe for public APIs.
+
+### GUID/UUID
+
+* Advantages: Globally unique, non-sequential, suitable when uniqueness across systems is required.
+* Disadvantages: 
+  - Very long string (36 characters)
+  - Consumes more storage and index space when data is large.
+
+### HashId
+
+* Advantages: 
+  - Shorter than GUID (5–10 characters)
+  - Can be decoded on the server
+  - More secure
+
+* Disadvantages: Requires encode/decode handling; not globally unique like GUID.
+
+| Solution  | Security Level | Length (chars) | DB Storage Size   |
+| --------- | -------------- | -------------- | ---------------- |
+| `int`     | Low            | 1–10           | 4 bytes          |
+| `GUID`    | High           | 36             | 16 bytes         |
+| `HashId`  | Medium         | 6–10           | ~10–12 bytes     |
+
+### Storage & Performance with Large Data
+
+- Integer IDs: lightest, but easiest to enumerate.
+- GUID:
+    - Increases index size in the database → slows down queries on large tables (millions of records).
+    - Consumes more storage space → impacts overall performance.
+
+- HashId:
+    - No extra storage needed, still stores integers but handles hashID in the backend.
+    - Smaller than GUID → more optimal for large tables queried by ID.
+    - Can create indexes, but should be tested with large datasets.
+
+
+For systems that require public IDs, moderate security, and want to maintain good performance at scale, HashId offers a balanced solution between security and storage efficiency.
+
+---
+
+# Relation to OWASP and Security
+
+Exposing real IDs in URLs is one of the main causes of **IDOR (Insecure Direct Object References)** vulnerabilities—a critical issue ranked highly in the **[OWASP Top 10](https://owasp.org/www-project-top-ten/)**.
+
+> While HashId does not replace proper authorization checks, it acts as a **first layer of defense**, enhancing security and slowing down automated attacks.
+
+---
+
+# Notes When Using HashId
+
+* Always use a unique `salt` for each application to prevent easy decoding.
+* HashId is not a high-security encryption method (like AES); it is only suitable for **anonymizing displayed IDs**.
+* Do not use HashId for sensitive information unless combined with additional encryption layers.
+
+---
+
+# Conclusion
+
+Using **HashId in .NET** is a simple yet highly effective approach to:
+
+* Enhance security,
+* Improve user experience,
+* And make your system more professional.
+
+If you are developing a Web API or ASP.NET application, consider integrating HashId today.
+
+# Related Articles on Our Blog
+
+If you found this guide helpful, you might also enjoy these in-depth articles on our website:
+- [Domain Driven Design in .NET: From Concept to Implementation](/blog/domain-driven-design-in-dot-net-from-concept-to-implementation)
+- [MediatR in .NET: A Complete Guide with Real Examples and Clean Architecture](/blog/mediatR-in-dot-net-a-complete-guide-with-real-examples-and-clean-architecture)
+- [Mastering Caching in .NET: Ultimate Guide to Blazing Fast, Scalable, and Cost-Effective Applications](/blog/caching-in-dotnet-best-practices)
+
+Stay tuned for more expert articles to help you master modern .NET architecture and patterns!

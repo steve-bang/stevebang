@@ -220,6 +220,10 @@ body {
   @apply bg-gray-50;
 }
 
+.markdown-content blockquote {
+   @apply border-l-4 border-l-purple-600 bg-gray-100 text-gray-700 italic px-2 my-1 rounded-sm; 
+}
+
 /* Responsive tables */
 @media (max-width: 640px) {
   .markdown-content table {
