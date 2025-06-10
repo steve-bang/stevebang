@@ -21,10 +21,11 @@ export const metadata: Metadata = {
   },
 };
 
-export default async function BlogPage({ params }: { params: Promise<{ page?: string }> }) {
 
-  const { page } = await params;
-  
+export default async function BlogPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
+
+  const { page } = await searchParams;
+
   const posts = await getBlogPosts();
   const pageNumber = page ? Number(page) : 1;
   const maxItemsPerPage = 6;
