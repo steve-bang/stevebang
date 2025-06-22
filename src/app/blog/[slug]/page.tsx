@@ -7,8 +7,6 @@ import { FiArrowLeft } from 'react-icons/fi';
 import Image from 'next/image';
 import remarkGfm from 'remark-gfm';
 import GoogleAdsBanner from '@/components/GoogleAdsBanner';
-import { extractHeadings } from '@/lib/extract-heading';
-import TabsOfContents from '@/components/TabsOfContents';
 import rehypeSlug from 'rehype-slug'
 
 interface BlogPost {
@@ -135,7 +133,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
     notFound();
   }
 
-  const headings = await extractHeadings(post.content);
+  //const headings = await extractHeadings(post.content);
 
   return (
     <article className="pt-32 pb-20">
@@ -187,18 +185,16 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
         )}
 
         {/* Article Content */}
-        <TabsOfContents headings={headings}>
-          <article className="markdown-content" itemProp="articleBody">
-            <MDXRemote source={post.content}
-              options={{
-                mdxOptions: {
-                  remarkPlugins: [remarkGfm],
-                  rehypePlugins: [rehypeSlug],
-                },
-              }}
-            />
-          </article>
-        </TabsOfContents>
+        <article className="markdown-content" itemProp="articleBody">
+          <MDXRemote source={post.content}
+            options={{
+              mdxOptions: {
+                remarkPlugins: [remarkGfm],
+                rehypePlugins: [rehypeSlug],
+              },
+            }}
+          />
+        </article>
 
         {/* Article Footer */}
         <footer className="mt-16 pt-8 border-t border-gray-200">
