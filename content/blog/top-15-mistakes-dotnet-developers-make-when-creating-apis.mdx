@@ -1,0 +1,391 @@
+---
+title: "Top 15 Mistakes Developers Make When Creating APIs: Lessons from 5 Years Working with .NET"
+date: "2025-06-24"
+description: "Discover the top 15 mistakes developers make when creating APIs, especially from a .NET perspective. Learn practical, beginner-friendly advice to avoid common pitfalls in API design, security, performance, and documentation, based on real-world experience."
+tags: ['API', 'REST', 'ASP.NET Core', 'Web API', 'best practices', 'mistakes', 'security', 'documentation', 'versioning', 'error handling', 'pagination', 'rate limiting', 'C#', 'beginner guide', 'practical tips']
+author: "Steve Bang"
+readingTime: "20 min read"
+image: "/images/top-15-mistakes-dotnet-developers-make-when-creating-apis.jpg"
+---
+
+Hi everyone! 👋  
+I'm a .NET developer with 5 years of experience, and during my career, I've worked on many projects involving REST APIs—some small, some large, and all with their own learning curves.  
+Today, I want to share my practical experience by discussing the **Top 15 Mistakes Developers Make When Creating APIs**.  
+If you’re a beginner, or even if you have some experience, I hope this post helps you avoid common pitfalls and build better APIs!
+
+---
+
+## 1. Not Following API Design Standards
+
+**Mistake:**  
+Ignoring standard conventions (like RESTful guidelines) and inventing your own style.
+
+**Why it matters:**  
+Standards exist for a reason—they make your API predictable, easier to use, and easier to integrate with other systems. If you don’t follow them, you’ll confuse consumers of your API and possibly yourself later.
+
+**.NET Perspective:**  
+Use RESTful routing in ASP.NET Core (`[HttpGet]`, `[HttpPost]`, etc.), and pay attention to resource-based endpoints.
+
+**Example:**
+
+| Good:                    | Bad:                      |
+|--------------------------|---------------------------|
+| `GET /api/products/123`  | `POST /api/GetProduct`    |
+| `POST /api/products`     | `GET /api/CreateProduct`  |
+
+**Tip:**  
+Read the [Microsoft REST API Guidelines](https://github.com/microsoft/api-guidelines) and the [ASP.NET Core Web API documentation](https://learn.microsoft.com/en-us/aspnet/core/web-api/).
+
+---
+
+## 2. Lack of Proper API Documentation
+
+**Mistake:**  
+Not providing documentation, or only writing minimal docs.
+
+**Why it matters:**  
+No one can use your API (including you, 6 months from now) if they don’t know how it works. Good docs save time for everyone.
+
+**.NET Perspective:**  
+Use Swagger/OpenAPI (Swashbuckle) with ASP.NET Core. With just a few lines you get interactive docs online.
+
+**Example:**
+
+```csharp
+// Startup.cs
+services.AddSwaggerGen();
+app.UseSwagger();
+app.UseSwaggerUI();
+```
+
+- Include sample requests and responses.
+- Document authentication, error codes, and edge cases.
+
+---
+
+## 3. Ignoring Versioning
+
+**Mistake:**  
+Publishing your API without a version, then breaking clients when you make changes.
+
+**Why it matters:**  
+APIs evolve. Without versioning, even a small change can break all existing consumers.
+
+**.NET Perspective:**  
+Prefix your routes with a version number (e.g., `/api/v1/products`). Use API versioning libraries like [AspNetApiVersioning](https://github.com/dotnet/aspnet-api-versioning).
+
+**Example:**
+
+```csharp
+[ApiVersion("1.0")]
+[Route("api/v{version:apiVersion}/products")]
+```
+
+---
+
+## 4. Not Validating Input Data
+
+**Mistake:**  
+Trusting that clients will always send good data.
+
+**Why it matters:**  
+Invalid input leads to data corruption, exceptions, or security issues.
+
+**.NET Perspective:**  
+Use Data Annotations (`[Required]`, `[StringLength]`, etc.) and model validation (`ModelState.IsValid`).
+
+**Example:**
+
+```csharp
+public class ProductDto
+{
+    [Required]
+    public string Name { get; set; }
+    [Range(0.01, 10000)]
+    public decimal Price { get; set; }
+}
+```
+
+---
+
+## 5. Weak Authentication and Authorization
+
+**Mistake:**  
+Leaving your API open or using insecure authentication.
+
+**Why it matters:**  
+Unprotected APIs are easy targets for abuse and data theft.
+
+**.NET Perspective:**  
+Use ASP.NET Core Identity, JWT bearer authentication, or OAuth2. Secure all endpoints that need protection.
+
+**Example:**
+
+```csharp
+[Authorize]
+[HttpGet("orders")]
+public IActionResult GetOrders() { ... }
+```
+
+**Tip:**  
+Always use HTTPS. Never accept credentials over HTTP.
+
+---
+
+## 6. Inconsistent Naming Conventions
+
+**Mistake:**  
+Mixing naming styles or using unclear names for endpoints and fields.
+
+**Why it matters:**  
+Consistency helps everyone understand and use your API without confusion.
+
+**.NET Perspective:**  
+Stick to `camelCase` or `PascalCase` (but be aware JSON often uses `camelCase`). Use plural nouns for collections (`/products` not `/productList`).
+
+**Example:**
+
+| Consistent                | Inconsistent          |
+|---------------------------|----------------------|
+| `/api/products`           | `/api/ProductList`   |
+| `productId`               | `prod_id`            |
+
+---
+
+## 7. Poor Error Handling
+
+**Mistake:**  
+Returning unhelpful error messages, or leaking sensitive stack traces.
+
+**Why it matters:**  
+Good error handling helps clients debug issues. Leaking technical details can expose vulnerabilities.
+
+**.NET Perspective:**  
+Use proper HTTP status codes and return structured error responses.
+
+**Example:**
+
+```json
+{
+  "error": "PRODUCT_NOT_FOUND",
+  "message": "Product with id 123 does not exist."
+}
+```
+
+- Use middleware for global error handling.
+- Don’t expose exception details in production.
+
+---
+
+## 8. Incorrect Use of HTTP Status Codes
+
+**Mistake:**  
+Returning `200 OK` for every response, even errors.
+
+**Why it matters:**  
+Status codes communicate what happened to the client. Misusing them confuses consumers and breaks integrations.
+
+**.NET Perspective:**  
+Return `201 Created` after successful POSTs, `204 No Content` for deletes, `400 Bad Request` for validation failures, `404 Not Found` for missing resources.
+
+**Example Table:**
+
+| Scenario              | Status Code      |
+|-----------------------|-----------------|
+| Resource created      | 201             |
+| Resource not found    | 404             |
+| Unauthorized          | 401             |
+| Bad request           | 400             |
+
+---
+
+## 9. No Rate Limiting
+
+**Mistake:**  
+Allowing clients to make unlimited requests.
+
+**Why it matters:**  
+Without rate limiting, your API can be brought down by accidental overuse or malicious attacks.
+
+**.NET Perspective:**  
+Use middleware (like [AspNetCoreRateLimit](https://github.com/stefanprodan/AspNetCoreRateLimit)) to enforce limits.
+
+**Example:**
+
+- Limit each IP to 100 requests per minute.
+- Return `429 Too Many Requests` if limits are exceeded.
+
+---
+
+## 10. Not Using HTTPS
+
+**Mistake:**  
+Letting clients access your API over HTTP.
+
+**Why it matters:**  
+HTTP traffic can be intercepted. Sensitive data (like tokens or personal info) can be stolen.
+
+**.NET Perspective:**  
+Enforce HTTPS redirection in your app.
+
+```csharp
+app.UseHttpsRedirection();
+```
+
+---
+
+## 11. Overcomplicated or Under-designed Endpoints
+
+**Mistake:**  
+Trying to do too much in one endpoint or having endpoints that are too granular.
+
+**Why it matters:**  
+Complex endpoints are hard to use and maintain. Under-designed ones force clients to make many calls.
+
+**.NET Perspective:**  
+Design endpoints around resources and actions, not implementation details. Provide filtering, sorting, and pagination where needed.
+
+**Example:**
+
+| Good: `/api/products?category=books&page=2`  | Bad: `/api/getProductsByCategoryAndPage` |
+
+---
+
+## 12. Not Implementing Pagination
+
+**Mistake:**  
+Returning all results in one response for list endpoints.
+
+**Why it matters:**  
+Large responses slow down your app and can cause timeouts.
+
+**.NET Perspective:**  
+Implement pagination using query parameters (e.g., `?page=1&pageSize=20`). Return metadata about total records.
+
+**Example:**
+
+```json
+{
+  "page": 1,
+  "pageSize": 20,
+  "totalItems": 200,
+  "products": [ ... ]
+}
+```
+
+---
+
+## 13. Hardcoding Secrets in Code
+
+**Mistake:**  
+Storing API keys, connection strings, or passwords directly in your code.
+
+**Why it matters:**  
+If your code is ever shared, your secrets can be leaked.
+
+**.NET Perspective:**  
+Use `appsettings.json`, environment variables, or Azure Key Vault. Never commit secrets to Git.
+
+**Example:**
+
+```json
+// appsettings.json
+"Jwt": {
+  "Key": "UseEnvVarOrKeyVaultHere"
+}
+```
+
+---
+
+## 14. Breaking Backward Compatibility
+
+**Mistake:**  
+Changing or removing endpoints/fields without warning.
+
+**Why it matters:**  
+Existing clients will break if you make incompatible changes.
+
+**.NET Perspective:**  
+Only make breaking changes in new API versions. Deprecate old endpoints with clear warnings.
+
+**Tip:**  
+Document deprecations and provide migration guides.
+
+---
+
+## 15. Ignoring Security Best Practices
+
+**Mistake:**  
+Not validating input, not checking permissions, exposing too much data, or not updating dependencies.
+
+**Why it matters:**  
+APIs are common targets for attacks. Security breaches can be catastrophic.
+
+**.NET Perspective:**
+- Sanitize and validate all input.
+- Use `[Authorize]` everywhere sensitive.
+- Limit what data is returned (no sensitive fields in DTOs).
+- Regularly update NuGet packages and monitor for vulnerabilities.
+
+**Security Checklist:**
+- [ ] All endpoints require authentication unless explicitly public.
+- [ ] Sensitive data never sent in URLs.
+- [ ] Input is validated and sanitized.
+- [ ] Secrets are never hardcoded or logged.
+
+---
+
+# Real-World Examples from My Experience
+
+### A. The Forgotten Version
+
+Early in my career, I published an API without versioning. Months later, business requirements changed, and I had to update several endpoints. Suddenly, all clients broke. Fixing this took hours of apologetic emails and frantic patching. Lesson learned: **Always version your API from day one!**
+
+---
+
+### B. The "It Works on My Machine" Error
+
+I once returned raw exception messages to the client for easier debugging. Then one day, a production crash exposed a database connection string in the error response. Thankfully, it was caught quickly, but it could have been a disaster. Now, I always use friendly, non-sensitive error messages.
+
+---
+
+### C. The Overload Outage
+
+Our API didn’t have rate limiting. One day, a misconfigured client started spamming thousands of requests per minute. The server didn't crash, but it slowed to a crawl for everyone. Adding rate limits was a quick fix, but I wish we’d started with it from the beginning.
+
+---
+
+# Conclusion
+
+APIs are everywhere—you’ll probably build, use, or maintain several in your career.  
+Avoiding these 15 mistakes will make your APIs more robust, secure, and enjoyable for others to use.
+
+**Quick Recap:**
+1. Not following API standards
+2. Poor documentation
+3. Ignoring versioning
+4. Not validating input
+5. Weak authentication/authorization
+6. Inconsistent naming
+7. Poor error handling
+8. Incorrect use of status codes
+9. No rate limiting
+10. Not using HTTPS
+11. Bad endpoint design
+12. No pagination
+13. Hardcoded secrets
+14. Breaking compatibility
+15. Ignoring security
+
+**My advice:**  
+Start with good habits. Use the tools ASP.NET Core gives you (Swagger, versioning, authentication, validation).  
+Read docs, follow good examples, and always put yourself in the shoes of someone who has never seen your API before.
+
+---
+
+## Further Reading
+
+- [Microsoft REST API Guidelines](https://github.com/microsoft/api-guidelines)
+- [ASP.NET Core Web API documentation](https://learn.microsoft.com/en-us/aspnet/core/web-api/)
+- [OWASP Top 10 for APIs](https://owasp.org/www-project-api-security/)
+- [Swagger/OpenAPI for .NET](https://learn.microsoft.com/en-us/aspnet/core/tutorials/web-api-help-pages-using-swagger/)
