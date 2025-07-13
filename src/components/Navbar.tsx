@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { FiMenu, FiX } from 'react-icons/fi';
 import Logo from '@/components/Logo';
+import SearchInput from './SearchInput';
 
 export default function Navbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -17,7 +18,8 @@ export default function Navbar() {
               <Logo />
             </Link>
           </div>
-          <div className="hidden md:flex items-center space-x-8">
+          <div className="hidden md:flex items-center space-x-6">
+            <SearchInput />
             <Link href="/" className="text-primary font-medium">Home</Link>
             <Link href="/blog" className="text-gray-700 hover:text-primary transition-colors">Blogs</Link>
             <Link href="/projects" className="text-gray-700 hover:text-primary transition-colors">Projects</Link>

@@ -9,7 +9,7 @@ import remarkGfm from 'remark-gfm';
 import GoogleAdsBanner from '@/components/GoogleAdsBanner';
 import rehypeSlug from 'rehype-slug'
 
-interface BlogPost {
+export interface BlogPost {
   slug: string;
   title: string;
   description: string;

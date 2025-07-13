@@ -81,8 +81,6 @@ export async function getBlogPostsBySearch(query: string): Promise<BlogPost[]> {
   
   return posts.filter(post => 
     post.title.toLowerCase().includes(searchQuery) ||
-    post.description.toLowerCase().includes(searchQuery) ||
-    post.content.toLowerCase().includes(searchQuery) ||
-    post.tags.some(tag => tag.toLowerCase().includes(searchQuery))
+    post.description.toLowerCase().includes(searchQuery)
   );
 } 
