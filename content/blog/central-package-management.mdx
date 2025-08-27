@@ -1,0 +1,198 @@
+---
+title: "Central Package Management in .NET: The Complete Guide to Simplifying NuGet Dependencies"
+date: "2025-08-27"
+description: "Master Central Package Management (CPM) in .NET. Our guide shows you how to manage all NuGet package versions from a single file, ensuring consistency and reducing errors in large solutions."
+tags: [".NET", "Central Package Management .NET", "NuGet dependency management", "Directory.Packages.props", "VersionOverride", "GlobalPackageReference", "Transitive Pinning", "dotnet", "dotnet tips", "how to use central package management", "CPM .NET example", "migrate to central package management"]
+author: "Steve Bang"
+readingTime: "30 min read"
+image: "/images/cpm.png"
+---
+
+If you've ever opened a large .NET solution with dozens of projects and found a wild west of NuGet package versions, you know the pain. One project uses Serilog `4.1.0`, another is stuck on Serilog `3.1.1`, and a legacy test project is still clinging to `xUnit 2.3.1` while everything else has moved on. This inconsistency is more than just an aesthetic issue—it leads to mysterious bugs, frustrating merge conflicts, and maintenance nightmares.
+
+As .NET solutions grow, managing dependencies project-by-project becomes increasingly complex and error-prone. But what if you could control all your package versions from a single, central location? Enter **Central Package Management (CPM)**, a NuGet feature that is nothing short of a game-changer for maintaining order in large codebases.
+
+In this comprehensive guide, we’ll explore what CPM is, why you need it, and how to implement it effectively to simplify your dependency management forever.
+
+# What is Central Package Management (CPM)?
+
+Central Package Management is a feature of NuGet, available in NuGet 6.2+ and .NET SDK 6.0.300+, that allows you to define and manage the versions of all your NuGet packages from a single, centralized file. Instead of specifying versions in each individual `.csproj` file, you declare them once in a `Directory.Packages.props` file at your solution root. Your projects then simply reference packages by name, and the version is automatically resolved from this central authority.
+
+
+# Why Central Package Management Matters
+
+## The Old Way: Package Chaos
+Before CPM, each project maintained its own `<PackageReference>` entries with explicit versions:
+```
+<ItemGroup>
+  <PackageReference Include="Serilog" Version="3.1.1" />
+</ItemGroup>
+```
+
+Multiply that by 30 projects, and you quickly end up with version mismatches. For example:
+
+- Project A → Serilog `4.1.0`
+- Project B → Serilog `4.0.2`
+- Project C → Serilog `3.1.1`
+
+This inconsistency causes:
+- **Conflicts** during builds
+- **Hidden bugs** due to different behaviors across versions
+- **Merge conflicts** when multiple devs update versions
+- **Maintenance overhead** (manually updating packages in many places)
+
+## The New Way: Centralized Control
+
+With CPM, package versions are **declared once** in a central file (`Directory.Packages.props`) at the root of your repository. Project files only list `which packages they use`, not their versions.
+
+Think of it as a `single source of truth` for dependencies.
+
+## How to Implement CPM in Your Solution
+Getting started with CPM is straightforward. Let's walk through the process.
+
+### Step 1: Enable Central Package Management
+The heart of CPM is the `Directory.Packages.props` file. Create this XML file at the root of your repository.
+You can create it manually or use the .NET CLI:
+```
+dotnet new packagesprops
+```
+
+Inside this file, you set the enabling property and define your package versions.
+```
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageVersion Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageVersion Include="Serilog" Version="4.1.0" />
+    <PackageVersion Include="Polly" Version="8.5.0" />
+    <PackageVersion Include="xunit" Version="2.8.1" />
+    <PackageVersion Include="AutoMapper" Version="13.0.1" />
+  </ItemGroup>
+</Project>
+```
+
+### Step 2: Update Your Project Files
+
+Next, you need to remove the `Version` attribute from all `<PackageReference>` items in your `.csproj` files. The version will now be supplied by the central file.
+
+Before (Traditional):
+```
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="AutoMapper" Version="12.0.1" /> <!-- Uh oh, a different version! -->
+  </ItemGroup>
+</Project>
+```
+
+After (With CPM):
+```
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" /> <!-- No Version attribute! -->
+    <PackageReference Include="AutoMapper" /> <!-- Version comes from Directory.Packages.props -->
+  </ItemGroup>
+</Project>
+```
+
+That's it! You've now enabled CPM. When you build your solution, NuGet will restore packages using the versions defined in your central file, ensuring absolute consistency.
+
+## Repository Structures and Multiple Props Files
+NuGet allows multiple `Directory.Packages.props` files in different directories. The one closest to the project will be used.
+
+```
+📂 Repo
+ ├─ Directory.Packages.props (root)
+ ├─ Solution1
+ │   ├─ Directory.Packages.props (overrides root)
+ │   └─ Project1.csproj
+ └─ Solution2
+     └─ Project2.csproj
+```
+
+- Project1.csproj → uses `Solution1/Directory.Packages.props`
+- Project2.csproj → uses root `Directory.Packages.props`
+
+If you want a project to import settings from a parent props file, you must add an explicit `<Import />`.
+
+## Advanced Features of CPM
+
+### 1. Different Versions for Different Target Frameworks
+Some packages drop support for older frameworks. You can use conditions:
+```
+<ItemGroup>
+  <PackageVersion Include="PackageA" Version="1.0.0"
+    Condition="'$(TargetFramework)' == 'netstandard2.0'" />
+  <PackageVersion Include="PackageA" Version="2.0.0"
+    Condition="'$(TargetFramework)' == 'net8.0'" />
+</ItemGroup>
+```
+
+### 2. Transitive Pinning
+Override transitive dependencies to ensure consistent versions:
+```
+<PropertyGroup>
+  <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+</PropertyGroup>
+```
+Be careful—NuGet won’t allow **downgrades**.
+
+### 3. Overriding Versions Per Project
+Sometimes a project needs a different version:
+```
+<ItemGroup>
+  <PackageReference Include="Serilog" VersionOverride="3.1.1" />
+</ItemGroup>
+```
+
+### 4. Global Package References
+Want a package in every project (like analyzers or build tools)?
+```
+<ItemGroup>
+  <GlobalPackageReference Include="SonarAnalyzer.CSharp" Version="10.3.0.106239" />
+</ItemGroup>
+```
+
+## Migrating an Existing Solution to CPM: A Practical Guide
+Migrating a large solution can seem daunting, but it can be broken down into manageable steps.
+
+- **Audit**: First, discover what you're working with. A simple PowerShell script can scan all .csproj files and list all unique package versions, highlighting the inconsistencies you need to fix.
+- **Create the Central File**: Create your `Directory.Packages.props` file at the solution root and set `ManagePackageVersionsCentrally` to `true`.
+- **Consolidate Versions**: Decide on the single version for each package you want to use. Move these definitions as `<PackageVersion>` entries into the central file. Resolve any conflicts through discussion and testing.
+- **Remove Versions from Projects**: Scripting this step is highly recommended. You can use tools like the `CentralisedPackageConverter` CLI tool to automate it.
+```
+# Install the converter tool
+dotnet tool install CentralisedPackageConverter --global
+
+# Run the conversion
+central-pkg-converter /path/to/your/solution/folder
+```
+- **Build and Test**: Build your solution. You will likely encounter NU1107 errors (version conflicts) if you missed anything. Address these errors. This is the most important step—test thoroughly!
+- **Commit and Enforce**: Commit the changes in a single, dedicated Pull Request. Once merged, educate your team that all new package additions must now be declared in the central file.
+
+## Best Practices and Pro Tips
+
+- **Own the Change**: Introduce CPM in its own PR. Don't mix it with feature work or other refactoring. This makes it easier to review and roll back if necessary.
+- **Comment Liberally**: Use XML comments in your Directory.Packages.props to explain why a particular version was chosen or if an override exists for a specific reason.
+- **Regular Maintenance**: Schedule periodic reviews of your central file to check for package updates and security patches. The centralized nature makes this audit incredibly easy.
+- **Use with Source Link & Centralized Versioning**: CPM pairs perfectly with tools like Nerdbank.GitVersioning for centralized product versioning and Microsoft.SourceLink for deterministic builds.
+- **Don't Overuse Global References**: Only make a package global if it is truly needed by every project. Overuse can slow down restore and build times.
+
+## When NOT to Use CPM
+
+While CPM is recommended in most cases, you might skip it if:
+- You only have a single-project solution
+- You need completely independent package versions for different projects
+
+## Wrapping Up
+
+Central Package Management is a **game-changer** for .NET developers. It transforms dependency management from a scattered mess into a centralized, reliable system.
+
+Since I started using CPM in my projects, I’ve noticed:
+- Easier upgrades
+- Cleaner code reviews
+- Faster onboarding for new developers
+
+If you haven’t already, I strongly recommend giving CPM a try. It’s one of those features that feels small at first—but saves you countless hours in the long run.
