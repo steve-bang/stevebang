@@ -8,6 +8,7 @@ import Image from 'next/image';
 import remarkGfm from 'remark-gfm';
 import GoogleAdsBanner from '@/components/GoogleAdsBanner';
 import rehypeSlug from 'rehype-slug'
+import { FaGlobe, FaGlobeAmericas, FaUserAlt } from 'react-icons/fa';
 
 export interface BlogPost {
   slug: string;
@@ -136,7 +137,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
   //const headings = await extractHeadings(post.content);
 
   return (
-    <article className="pt-32 pb-20">
+    <article className="pt-28 pb-20">
       {/* JSON-LD Structured Data */}
       <script
         type="application/ld+json"
@@ -158,9 +159,12 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
         {/* Article Header */}
         <header className="mb-12">
           <h1 className="text-4xl font-bold mb-4">{post.title}</h1>
-          <div className="flex items-center space-x-4 text-gray-600">
-            <span itemProp="author">{post.author}</span>
-            <span>•</span>
+          <div className="flex items-center space-x-2 text-gray-600">
+            <FaUserAlt />
+            <span itemProp="author">
+              {post.author}
+            </span>
+            <FaGlobeAmericas />
             <time dateTime={post.date} itemProp="datePublished">
               {format(new Date(post.date), 'MMMM d, yyyy')}
             </time>
