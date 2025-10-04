@@ -1,0 +1,158 @@
+---
+title: "Anatomy of a JWT — Header, Payload, Signature"
+date: "2025-10-04"
+description: "Understand the core structure of JWTs — Header, Payload, and Signature. Learn how each part works, how they’re encoded, and why every BE developer should know how to verify JWT tokens securely."
+tags: ['JWT', ' JSON Web Token', ' .NET authentication', ' ASP.NET Core security', ' token-based authentication', ' JWT in .NET', ' JWT advantages', ' .NET developer guide', ' stateless authentication', ' API security', 'JWT structure', ' JWT header', ' JWT payload', ' JWT signature', ' JSON Web Token explained']
+author: "Steve Bang"
+readingTime: "10 min read"
+image: "/images/jwt-anatomy-header-payload-signature.png"
+---
+
+As a BE developer, you’ve probably used JWTs (JSON Web Tokens) to authenticate users in APIs or microservices. But have you ever stopped to **decode** one and see what’s actually inside?
+
+JWTs are more than just access tokens — they’re **self-contained information carriers** that hold user identity, claims, and security data. If you truly understand their structure, you’ll be able to:
+
+Debug authentication issues quickly
+
+Implement secure validation logic
+
+Prevent token tampering or misuse
+
+Build scalable, stateless APIs
+
+In this post, we’ll dive deep into the **three core parts** of a JWT: **Header**, **Payload**, and **Signature** — and explore how they work together to make authentication both simple and powerful.
+
+# What Is the Structure of a JWT?
+A JWT is a **compact, URL-safe** string that consists of **three parts**, separated by dots (`.`):
+
+```
+xxxxx.yyyyy.zzzzz
+```
+
+Each part is **Base64Url encoded**, which means you can safely include it in URLs, HTTP headers, or cookies without issues.
+
+Here’s what each segment represents:
+
+- **Header** — Describes the token’s type and the algorithm used for signing.
+- **Payload** — Contains the actual claims (user data, roles, expiration time, etc.).
+- **Signature** — Verifies that the token hasn’t been tampered with.
+
+Let’s break them down one by one.
+
+## The Header — Token Type and Algorithm
+
+The **Header** is a simple JSON object that defines metadata about the token.
+
+A typical JWT header looks like this:
+```json
+{
+  "alg": "HS256",
+  "typ": "JWT"
+}
+```
+- `alg`: The signing algorithm (e.g., HS256 for HMAC-SHA256, RS256 for RSA).
+- `typ`: The token type — always `"JWT"`.
+
+This part is then Base64Url encoded. For example, encoding the header above might give you something like:
+
+```
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9
+```
+
+**Real-World Example**
+Imagine your .NET API uses **HS256** (HMAC-SHA256) with a secret key to sign tokens for your users. The Header tells any recipient of the token exactly **how to verify** it — using HMAC and your shared secret.
+
+If you later switch to **RS256** (public/private key), the Header will update accordingly, and the verification logic in your backend will adapt — **no need to store sessions** or extra metadata.
+
+## The Payload — The Token’s Data (Claims)
+The **Payload** is the heart of a JWT. It contains **claims** — pieces of information about the user or the token itself.
+
+Example Payload:
+```
+{
+  "sub": "1234567890",
+  "name": "Steve",
+  "role": "admin",
+  "iat": 1728124800,
+  "exp": 1728128400
+}
+```
+
+Let’s break these down:
+| Field   |      Description      | 
+|----------|:-------------:|
+| sub |  Subject — the unique identifier of the user. |
+| name |    User’s name or username.   |
+| role | Role or permission claim for authorization. |
+| iat | Issued At — timestamp when token was created. |
+| exp | Expiration — timestamp when token will expire. |
+
+JWT claims can be three types:
+- Registered claims — standardized fields (iss, sub, aud, exp, iat)
+- Public claims — custom fields you define (name, role, etc.)
+- Private claims — app-specific claims shared between parties
+
+After Base64Url encoding, the Payload may look like this:
+```
+eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IlN0ZXZlIiwicm9sZSI6ImFkbWluIiwiaWF0IjoxNzI4MTI0ODAwLCJleHAiOjE3MjgxMjg0MDB9
+```
+
+## The Signature — Ensuring Token Integrity
+
+This is where the security magic happens.
+
+The Signature ensures that the token hasn’t been altered since it was issued.
+
+The formula is:
+```
+HMACSHA256(
+    base64UrlEncode(header) + "." +
+    base64UrlEncode(payload),
+    secret)
+```
+
+If someone changes even one character in the Header or Payload, the Signature won’t match anymore, and the token will be rejected.
+
+Example Signature (truncated):
+```
+SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c
+```
+
+In a API, when a request includes a JWT in the Authorization header like:
+
+```
+Authorization: Bearer <token>
+```
+
+The framework (via JwtBearerHandler) automatically validates:
+
+- The token’s **Signature** using the provided secret or public key
+- The **expiration** time (exp)
+- The **issuer** and **audience** if configured
+
+If anything fails — boom 💥 — `401 Unauthorized`.
+
+## Putting It All Together
+
+Here’s what a full JWT looks like:
+```
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.
+eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IlN0ZXZlIiwicm9sZSI6ImFkbWluIiwiaWF0IjoxNzI4MTI0ODAwLCJleHAiOjE3MjgxMjg0MDB9.
+SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c
+```
+
+Even though it looks like gibberish, every part has meaning:
+
+- First part (Header): Algorithm and Type
+- Second part (Payload): User Claims
+- Third part (Signature): Verification Seal
+
+You can decode the first two parts using [jwt.io](https://jwt.io) — just don’t share your secret key there!
+
+# Summary
+
+Understanding the anatomy of a JWT is essential for writing secure and **maintainable authentication logic** in API.
+
+- The **Header** defines the token type and signing algorithm.
+- The **Payload** carries the user data (claims).
+- The **Signature** guarantees integrity and authenticity.
