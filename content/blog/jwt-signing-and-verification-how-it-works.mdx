@@ -1,0 +1,221 @@
+---
+title: "How JWT Signing and Verification Work - JWT #3"
+date: "2025-10-11"
+description: "Learn how JWT signing and verification work under the hood. Understand HMAC, RSA algorithms, and how to validate JWTs securely in your applications. Essential reading for developers implementing secure authentication."
+tags: ['JWT', ' JSON Web Token', ' .NET authentication', ' ASP.NET Core security', ' token-based authentication', ' JWT in .NET', ' JWT advantages', ' .NET developer guide', ' stateless authentication', ' API security', 'JWT structure', ' JWT header', ' JWT payload', ' JWT signature', ' JSON Web Token explained', 'JWT signing', 'JWT verification', 'JWT signature validation']
+author: "Steve Bang"
+readingTime: "10 min read"
+image: "/images/jwt-signing-and-verification-how-it-works.png"
+---
+
+# Why Signing & Verification Are the Core of JWT Security
+
+In the previous post, we explored the **anatomy of a JWT** — the Header, Payload, and Signature.
+But one of the most important — and often misunderstood — parts of JWTs is **how they are signed and verified**.
+
+JWTs aren’t just random strings. Their **Signature** ensures **authenticity** — proving that the token was created by a trusted issuer and not modified in transit. Without proper signing and verification, JWTs become easy targets for **token forgery** or **identity spoofing**.
+
+So in this article, let’s dive deep into:
+- How JWT signing works
+- How verification works
+- What algorithms are used (HMAC vs RSA)
+- Real-world examples
+- Best practices for developers
+
+
+# What Is JWT Signing?
+
+JWT signing is the process of generating a **unique cryptographic signature** for your token using a **secret key** or **private key**.
+
+When your authentication server issues a token, it creates a signature based on the Header and Payload using the algorithm specified in the Header (for example, `HS256` or `RS256`).
+
+**Formula:**
+```
+Signature = Sign( base64UrlEncode(Header) + "." + base64UrlEncode(Payload), secret )
+```
+This signature is then appended to the token:
+```
+<Header>.<Payload>.<Signature>
+```
+
+If someone tries to alter the Header or Payload, the Signature will no longer match — and the token will be rejected during verification.
+In short:
+- Signing ensures integrity (the token isn’t modified).
+- Verification ensures authenticity (the token came from a trusted source).
+
+# The Two Common JWT Signing Algorithms
+
+There are two major families of signing algorithms used with JWTs:
+
+**Symmetric Algorithms (HMAC — e.g., HS256)**
+- Uses the same secret key to both sign and verify the token.
+- Fast and simple.
+- Suitable when the issuer and verifier are the same server (like in a monolithic API).
+
+Example Header:
+```
+{
+  "alg": "HS256",
+  "typ": "JWT"
+}
+```
+
+In C#, you can create a token like this:
+```csharp
+var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes("MySuperSecretKey"));
+var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
+
+var token = new JwtSecurityToken(
+    issuer: "https://myapi.com",
+    audience: "https://myapi.com",
+    claims: claims,
+    expires: DateTime.Now.AddHours(1),
+    signingCredentials: credentials);
+
+var jwt = new JwtSecurityTokenHandler().WriteToken(token);
+```
+
+Verification happens using the same secret key.
+If any part of the token changes — the verification fails.
+
+**Best for**: Internal services, single-server APIs.
+**Not ideal for**: Distributed systems where multiple services need to verify tokens.
+
+**Asymmetric Algorithms (RSA — e.g., RS256)**
+- Uses a private key to sign and a public key to verify.
+- Safer for distributed systems.
+- Common in OAuth 2.0 and OpenID Connect.
+Example Header:
+```
+{
+  "alg": "RS256",
+  "typ": "JWT"
+}
+```
+
+Here, only the **issuer** (like your auth server) knows the private key.
+All other services only need the **public key** to verify tokens — no need to share secrets.
+
+Example in C#:
+```csharp
+var rsa = RSA.Create();
+rsa.ImportFromPem(File.ReadAllText("private.pem"));
+var credentials = new SigningCredentials(new RsaSecurityKey(rsa), SecurityAlgorithms.RsaSha256);
+
+var token = new JwtSecurityToken(
+    issuer: "https://auth.myapp.com",
+    audience: "https://api.myapp.com",
+    claims: claims,
+    expires: DateTime.UtcNow.AddHours(1),
+    signingCredentials: credentials);
+
+var jwt = new JwtSecurityTokenHandler().WriteToken(token);
+```
+
+Verification (on API side):
+```csharp 
+var publicKey = RSA.Create();
+publicKey.ImportFromPem(File.ReadAllText("public.pem"));
+var key = new RsaSecurityKey(publicKey);
+
+tokenHandler.ValidateToken(jwt, new TokenValidationParameters
+{
+    ValidateIssuerSigningKey = true,
+    IssuerSigningKey = key,
+    ValidateIssuer = true,
+    ValidIssuer = "https://auth.myapp.com",
+    ValidateAudience = true,
+    ValidAudience = "https://api.myapp.com",
+    ValidateLifetime = true
+}, out SecurityToken validatedToken);
+```
+
+**Best for**: Microservices, cloud systems, third-party integrations.
+**More complex** to set up and manage (key rotation, certificates, etc.).
+
+# How JWT Verification Works — Step-by-Step
+
+When a client sends a request with a JWT, your server needs to verify it before granting access.
+Here’s what happens under the hood:
+
+**Step 1: Receive the Token**
+Usually sent in the Authorization header:
+```
+Authorization: Bearer <JWT>
+```
+
+**Step 2: Split the Token**
+The server splits it into its three parts:
+
+- Header
+- Payload
+- Signature
+
+**Step 3: Decode and Recreate the Signature**
+The server takes the Header and Payload, decodes them, and recomputes the signature using the same algorithm and key.
+
+**Step 4: Compare Signatures**
+If the recomputed signature matches the token’s signature → ✅ Valid token.
+If not → ❌ Token is rejected.
+
+**Step 5: Validate Claims**
+Even if the signature is valid, the server also checks:
+
+- Is the token expired (exp)?
+- Is the issuer correct (iss)?
+- Is the audience valid (aud)?
+
+Example in .NET:
+```
+services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+.AddJwtBearer(options =>
+{
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidIssuer = "https://auth.myapp.com",
+        ValidateAudience = true,
+        ValidAudience = "https://api.myapp.com",
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes("MySuperSecretKey"))
+    };
+});
+```
+
+Once validated, you can access the user’s identity via:
+```
+var username = HttpContext.User.Identity.Name;
+```
+
+# How It All Comes Together
+Imagine you’re building a SaaS platform:
+1. User logs in via your authentication server (auth.myapp.com).
+2. The server validates credentials and signs a JWT with its private key.
+3. The user sends the JWT to your API (api.myapp.com) on every request.
+4. The API verifies the token using the public key, checks expiration, and extracts user claims.
+5. If everything checks out — the request is processed.
+
+This stateless mechanism means:
+- No session storage is required.
+- Any service can verify tokens without calling the auth server.
+- Performance and scalability improve significantly.
+
+# Common Pitfalls Developers Make
+Even experienced developers can make dangerous mistakes when handling JWT signing and verification.
+| Mistake                       | Why It’s Dangerous                                      |
+| ----------------------------- | ------------------------------------------------------- |
+| Using `none` algorithm        | Completely disables signing; attacker can forge tokens. |
+| Reusing weak or short secrets | Easy to brute-force; always use at least 256-bit keys.  |
+| Not verifying `iss` or `aud`  | Token can be replayed to unintended APIs.               |
+| Forgetting to check `exp`     | Expired tokens might still grant access.                |
+| Sharing private key publicly  | Compromises your entire security model.                 |
+
+Always treat your signing keys like passwords — store them securely (e.g., Azure Key Vault, AWS Secrets Manager).
+
+# Key Takeaways
+- Signing guarantees the token’s integrity — only trusted parties can issue it.
+- Verification guarantees authenticity — tokens can’t be forged or modified.
+- HMAC (HS256) is great for simple apps.
+- RSA (RS256) is ideal for distributed or multi-service systems.
+- Always validate issuer, audience, and expiration claims.
