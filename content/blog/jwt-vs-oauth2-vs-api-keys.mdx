@@ -1,0 +1,190 @@
+---
+title: "JWT vs OAuth2 vs API Keys — Choosing the Right Authentication Strategy for Modern Applications - JWT #4"
+date: "2025-10-11"
+description: "Confused about JWT, OAuth2, and API Keys? Learn how these authentication methods differ, when to use each, and which is best for your .NET or web application."
+tags: ['JWT', ' JSON Web Token', ' .NET authentication', ' ASP.NET Core security', ' token-based authentication', ' JWT in .NET', ' JWT advantages', ' .NET developer guide', ' stateless authentication', ' API security', 'JWT structure', ' JWT header', ' JWT payload', ' JWT signature', ' JSON Web Token explained', 'JWT vs API Key', 'JWT vs OAuth2', 'API authentication best practices', 'OAuth2 explained']
+author: "Steve Bang"
+readingTime: "10 min read"
+image: "/images/jwt-vs-oauth2-vs-api-keys.png"
+---
+## Introduction
+
+If you’ve been building APIs or web applications, you’ve likely come across terms like **JWT**, **OAuth2**, and **API Keys**. Each of these methods handles **authentication and authorization**, but they differ in complexity, use cases, and security level.
+
+As developers, especially in the .NET world, understanding *which method suits your app best* can make or break your system’s security and scalability.
+
+In this post, we’ll explore **the differences between JWT, OAuth2, and API Keys**, how they work, real-world examples, and guidance on choosing the right one for your project.
+
+---
+
+## 1. Quick Overview — What Are JWT, OAuth2, and API Keys?
+
+| Method | Full Name | Primary Purpose | Typical Use Case |
+|--------|------------|-----------------|------------------|
+| **JWT (JSON Web Token)** | JSON Web Token | Token-based authentication and authorization | Web APIs, SPAs, mobile apps |
+| **OAuth2** | Open Authorization 2.0 | Delegated access and third-party authorization | Login with Google, GitHub APIs |
+| **API Key** | API Access Key | Simple authentication mechanism | Internal services, small APIs |
+
+---
+
+## 2. JWT (JSON Web Token)
+
+JWT is a **self-contained token** used for securely transmitting information between parties. It’s composed of **three parts**: Header, Payload, and Signature.
+
+A typical JWT looks like this:  
+```
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.
+eyJ1c2VySWQiOiIxMjMiLCJyb2xlIjoiQWRtaW4ifQ.
+H2mYlNQoDq8qytpGzE4yPcvFbWvEl1eYlZxvQG_oZgw
+```
+
+Each token is **digitally signed**, ensuring it can’t be tampered with.
+
+### How It Works
+1. User logs in with credentials.
+2. Server validates credentials and generates a **JWT**.
+3. Client stores the JWT (e.g., in localStorage or cookies).
+4. On each request, client sends JWT in the `Authorization: Bearer <token>` header.
+5. Server verifies signature and decodes the payload to identify the user.
+
+### Pros
+- Stateless and scalable (no need to store sessions in DB).
+- Fast validation.
+- Works well with microservices and SPAs.
+
+### Cons
+- Tokens can’t be revoked easily before they expire.
+- If stored insecurely, can be stolen (e.g., via XSS).
+
+**Best for:** APIs and SPAs requiring fast, stateless authentication.
+
+---
+
+## 3. OAuth2
+
+OAuth2 is **not just an authentication system**—it’s a **delegated authorization framework**. It’s widely used when you want to **grant third-party apps access to your data without sharing your password**.
+
+### Real-World Example
+When you “Sign in with Google” on a website, you’re using OAuth2.  
+Google authorizes the site to access your profile data without giving them your Google password.
+
+### How It Works
+1. The user is redirected to the **OAuth provider** (like Google).
+2. The user logs in and consents to share data.
+3. The provider sends an **authorization code** to the app.
+4. The app exchanges the code for an **access token** (and sometimes a refresh token).
+5. The access token is used to call APIs.
+
+### Pros
+- Delegated access with granular permissions (Scopes).
+- Supports refresh tokens.
+- Very secure for third-party integrations.
+
+### Cons
+- Complex to implement correctly.
+- Overkill for small internal APIs.
+
+**Best for:** Third-party apps, large ecosystems, or when using social logins (Google, GitHub, Facebook, etc.).
+
+---
+
+## 4. API Keys
+
+API Keys are the **simplest form of authentication**—a single secret token used to access an API.
+
+Example:
+```http
+GET /api/data
+Authorization: ApiKey 12345-abcde-67890
+```
+
+The server checks whether the key is valid and grants access.
+
+### Pros
+- Simple to use and implement.
+- Great for internal services, scripts, or prototypes.
+
+### Cons
+- No user context (only identifies the calling app).
+- Hard to revoke without affecting clients.
+- Doesn’t support scopes or permissions easily.
+
+**Best for:** Simple internal APIs or backend-to-backend services.
+
+---
+
+## 5. JWT vs OAuth2 vs API Keys — The Deep Comparison
+
+| Feature | JWT | OAuth2 | API Key |
+|----------|-----|--------|---------|
+| **Authentication** | Yes | Yes | Yes |
+| **Authorization** | Yes | Yes | Limited |
+| **Stateful or Stateless** | Stateless | Can be both | Stateless |
+| **Supports Scopes/Roles** | Yes (custom claims) | Yes | No |
+| **Token Expiration** | Yes | Yes | Optional |
+| **Revocation Support** | Hard | Yes | Manual |
+| **Ease of Implementation** | Moderate | Complex | Simple |
+| **Ideal Use Case** | First-party apps & APIs | Third-party access | Internal APIs |
+
+---
+
+## 6. Choosing the Right Strategy
+
+Let’s break it down by scenario.
+
+### When to Use JWT
+- You’re building a **.NET Web API** or **microservices** system.
+- You want **stateless authentication** (no server session).
+- You handle both authentication and authorization internally.
+
+> Example: A React + .NET Web API app where the user logs in, gets a JWT, and uses it for all API requests.
+
+### When to Use OAuth2
+- You want to let users log in using **Google, Facebook, or Microsoft**.
+- You need **fine-grained scopes** and **refresh tokens**.
+- You’re building a **multi-tenant SaaS** that integrates with other platforms.
+
+> Example: Your app allows “Login with GitHub” to fetch user repositories.
+
+### When to Use API Keys
+- You’re securing **internal APIs**, **cron jobs**, or **backend integrations**.
+- Simplicity is more important than flexibility.
+
+> Example: A background worker service calling your internal metrics API with a single shared API Key.
+
+---
+
+## 7. Combining Methods (Real-World Architecture)
+
+In modern systems, it’s common to **combine** these methods:
+
+- Use **OAuth2** for user authorization (delegated access).  
+- Use **JWTs** to represent access tokens in your APIs.  
+- Use **API Keys** for internal service-to-service communication.  
+
+This hybrid approach gives you the **best of all worlds** — scalability, security, and flexibility.
+
+---
+
+## 8. Security Best Practices
+
+No matter which method you choose:
+- Always use **HTTPS**.
+- Never store tokens in plain text or URLs.
+- Implement **token expiration** and **rotation**.
+- Prefer **short-lived access tokens** and **refresh tokens**.
+- Regularly **rotate API Keys**.
+
+---
+
+## Conclusion
+
+Choosing between **JWT, OAuth2, and API Keys** isn’t about which is “best” — it’s about what fits your app’s needs.
+
+- For **modern web apps** → JWT  
+- For **third-party integrations** → OAuth2  
+- For **simple internal APIs** → API Keys  
+
+By understanding the strengths and trade-offs of each, you can design a secure, scalable authentication system that fits your project perfectly.
+
+---
