@@ -1,0 +1,1223 @@
+---
+slug: "idempotency-failures-api-breaks-under-retry"
+title: "Idempotency Failures: Why Your API Breaks Under Retry"
+date: "2025-12-20"
+description: "Learn why network retries cause duplicate payments, corrupted data, and how to build idempotent APIs that handle retries safely."
+tags: ["dotnet", "api", "backend", "architecture", "microservices", "reliability"]
+author: "Steve Bang"
+readingTime: "13 min read"
+image: "/images/idempotency-failures-api-breaks-under-retry.jpg"
+---
+
+# Idempotency Failures: Why Your API Breaks Under Retry
+
+Your payment API just charged a customer three times for the same order. Your inventory system created duplicate SKUs. Your notification service sent the same email fifteen times. The logs show "network timeout" errors, but everything "worked" afterward. Welcome to the nightmare of non-idempotent APIs.
+
+Here's the brutal reality: **every production system will experience retries**. Network glitches, timeouts, load balancer hiccups, client-side errors—they're inevitable. The question isn't whether your API will be called multiple times with the same request; it's whether your system will handle it correctly.
+
+I've spent countless hours debugging production incidents caused by idempotency failures. In this post, I'll show you exactly where things go wrong, how to detect these issues before they reach production, and proven patterns to build APIs that handle retries safely.
+
+## What Is Idempotency and Why It Matters
+
+**Idempotency** means performing the same operation multiple times produces the same result as performing it once. In HTTP terms:
+
+```
+Request 1: POST /api/orders → Creates Order #123
+Request 2: POST /api/orders (same payload) → Returns Order #123 (not #124)
+Request 3: POST /api/orders (same payload) → Returns Order #123 (not #125)
+```
+
+### The Cost of Getting It Wrong
+
+Let me share a real incident: A payment gateway integration had a 2-second timeout configured. During a traffic spike, the gateway processed payments successfully but took 2.5 seconds to respond. The client timed out, retried, and the customer was charged twice. This happened to 847 customers in one hour before we caught it. **Total cost: $127,000 in refunds + reputation damage + engineering hours.**
+
+Another case: A microservices architecture where an order service called an inventory service. Network blip caused a retry. One order, two inventory decrements. Result: inventory count was wrong for 3,000 products, leading to overselling and angry customers.
+
+## Why APIs Fail to Be Idempotent
+
+### Problem 1: The Classic "Just Insert" Anti-Pattern
+
+This is the most common mistake I see in code reviews:
+
+```csharp
+[HttpPost("api/orders")]
+public async Task<IActionResult> CreateOrder([FromBody] CreateOrderRequest request)
+{
+    // Calculate total
+    var total = request.Items.Sum(i => i.Price * i.Quantity);
+    
+    // Create order
+    var order = new Order
+    {
+        CustomerId = request.CustomerId,
+        Items = request.Items,
+        Total = total,
+        CreatedAt = DateTime.UtcNow
+    };
+    
+    _context.Orders.Add(order);
+    await _context.SaveChangesAsync();
+    
+    // Charge payment
+    await _paymentService.ChargeAsync(request.CustomerId, total);
+    
+    // Send confirmation email
+    await _emailService.SendOrderConfirmationAsync(order);
+    
+    return Ok(new { OrderId = order.Id });
+}
+```
+
+**What happens on retry?**
+- ❌ Second order created
+- ❌ Customer charged twice
+- ❌ Two confirmation emails sent
+
+**Why this happens:**
+Every request is treated as unique. There's no mechanism to detect that this request is identical to a previous one.
+
+### Problem 2: The "Check Then Insert" Race Condition
+
+Some developers try to fix this with a check:
+
+```csharp
+[HttpPost("api/orders")]
+public async Task<IActionResult> CreateOrder([FromBody] CreateOrderRequest request)
+{
+    // Check if order already exists
+    var existing = await _context.Orders
+        .FirstOrDefaultAsync(o => 
+            o.CustomerId == request.CustomerId &&
+            o.Items.SequenceEqual(request.Items));
+    
+    if (existing != null)
+    {
+        return Ok(new { OrderId = existing.Id });
+    }
+    
+    // Create new order
+    var order = new Order
+    {
+        CustomerId = request.CustomerId,
+        Items = request.Items,
+        Total = request.Items.Sum(i => i.Price * i.Quantity),
+        CreatedAt = DateTime.UtcNow
+    };
+    
+    _context.Orders.Add(order);
+    await _context.SaveChangesAsync();
+    
+    await _paymentService.ChargeAsync(request.CustomerId, order.Total);
+    
+    return Ok(new { OrderId = order.Id });
+}
+```
+
+**This fails because:**
+1. Two requests arrive simultaneously
+2. Both check database → no existing order found
+3. Both create orders
+4. Both charge payment
+5. Duplicate orders created
+
+This is a **race condition** disguised as idempotency handling.
+
+### Problem 3: Partial Failure Without Rollback
+
+Even with proper idempotency keys, state management can fail:
+
+```csharp
+[HttpPost("api/orders")]
+public async Task<IActionResult> CreateOrder([FromBody] CreateOrderRequest request)
+{
+    var idempotencyKey = request.IdempotencyKey;
+    
+    // Check idempotency
+    var existing = await GetExistingOrderAsync(idempotencyKey);
+    if (existing != null)
+        return Ok(existing);
+    
+    // Create order
+    var order = await CreateOrderInDatabaseAsync(request);
+    
+    // Charge payment (external call - can fail)
+    var payment = await _paymentService.ChargeAsync(order.Total);
+    
+    // If we crash here, order exists but no idempotency record!
+    
+    // Record idempotency
+    await RecordIdempotencyAsync(idempotencyKey, order.Id);
+    
+    return Ok(order);
+}
+```
+
+**Failure scenario:**
+1. Request 1: Order created, payment charged, **server crashes** before recording idempotency
+2. Request 2 (retry): No idempotency record found → creates second order, charges again
+
+## The Right Way: Idempotency Keys
+
+The industry-standard solution is **idempotency keys** - unique identifiers that clients send to ensure operations are processed exactly once.
+
+### Implementation: Database-First Approach
+
+```csharp
+public class IdempotentRequestRecord
+{
+    public string IdempotencyKey { get; set; }
+    public string ResourceType { get; set; }
+    public string ResourceId { get; set; }
+    public string RequestHash { get; set; }
+    public string ResponseBody { get; set; }
+    public int StatusCode { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime? CompletedAt { get; set; }
+    public string Status { get; set; } // Processing, Completed, Failed
+}
+
+[HttpPost("api/orders")]
+public async Task<IActionResult> CreateOrder(
+    [FromHeader(Name = "Idempotency-Key")] string idempotencyKey,
+    [FromBody] CreateOrderRequest request)
+{
+    if (string.IsNullOrEmpty(idempotencyKey))
+    {
+        return BadRequest(new { Error = "Idempotency-Key header is required" });
+    }
+    
+    // Start transaction
+    using var transaction = await _context.Database.BeginTransactionAsync();
+    
+    try
+    {
+        // Try to acquire idempotency lock
+        var idempotencyRecord = new IdempotentRequestRecord
+        {
+            IdempotencyKey = idempotencyKey,
+            ResourceType = "Order",
+            RequestHash = ComputeHash(request),
+            Status = "Processing",
+            CreatedAt = DateTime.UtcNow
+        };
+        
+        try
+        {
+            _context.IdempotentRequests.Add(idempotencyRecord);
+            await _context.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
+        {
+            // Key already exists - return cached response
+            await transaction.RollbackAsync();
+            return await GetCachedResponseAsync(idempotencyKey, request);
+        }
+        
+        // Only one thread/process reaches here
+        var order = new Order
+        {
+            CustomerId = request.CustomerId,
+            Items = request.Items.Select(i => new OrderItem
+            {
+                ProductId = i.ProductId,
+                Quantity = i.Quantity,
+                Price = i.Price
+            }).ToList(),
+            Total = request.Items.Sum(i => i.Price * i.Quantity),
+            CreatedAt = DateTime.UtcNow
+        };
+        
+        _context.Orders.Add(order);
+        await _context.SaveChangesAsync();
+        
+        // Charge payment
+        var paymentResult = await _paymentService.ChargeAsync(
+            request.CustomerId, 
+            order.Total,
+            idempotencyKey); // Payment service should also be idempotent!
+        
+        order.PaymentId = paymentResult.TransactionId;
+        
+        // Update idempotency record
+        idempotencyRecord.ResourceId = order.Id.ToString();
+        idempotencyRecord.Status = "Completed";
+        idempotencyRecord.CompletedAt = DateTime.UtcNow;
+        idempotencyRecord.StatusCode = 200;
+        idempotencyRecord.ResponseBody = JsonSerializer.Serialize(new
+        {
+            OrderId = order.Id,
+            Total = order.Total,
+            PaymentId = order.PaymentId
+        });
+        
+        await _context.SaveChangesAsync();
+        await transaction.CommitAsync();
+        
+        // Send notification asynchronously (outside transaction)
+        _ = Task.Run(() => _emailService.SendOrderConfirmationAsync(order));
+        
+        return Ok(new
+        {
+            OrderId = order.Id,
+            Total = order.Total,
+            PaymentId = order.PaymentId
+        });
+    }
+    catch (Exception ex)
+    {
+        await transaction.RollbackAsync();
+        
+        // Mark as failed for observability
+        await MarkIdempotencyAsFailedAsync(idempotencyKey, ex.Message);
+        
+        throw;
+    }
+}
+
+private async Task<IActionResult> GetCachedResponseAsync(
+    string idempotencyKey, 
+    CreateOrderRequest request)
+{
+    var existing = await _context.IdempotentRequests
+        .FirstOrDefaultAsync(r => r.IdempotencyKey == idempotencyKey);
+    
+    if (existing == null)
+    {
+        return StatusCode(500, new { Error = "Idempotency record not found" });
+    }
+    
+    // Verify request hasn't changed
+    var requestHash = ComputeHash(request);
+    if (existing.RequestHash != requestHash)
+    {
+        return Conflict(new 
+        { 
+            Error = "Request body changed for the same idempotency key" 
+        });
+    }
+    
+    // Wait if still processing
+    if (existing.Status == "Processing")
+    {
+        return await WaitForCompletionAsync(idempotencyKey);
+    }
+    
+    // Return cached response
+    if (existing.Status == "Completed")
+    {
+        var responseBody = JsonSerializer.Deserialize<object>(existing.ResponseBody);
+        return StatusCode(existing.StatusCode, responseBody);
+    }
+    
+    // Previous attempt failed - allow retry
+    if (existing.Status == "Failed")
+    {
+        await _context.IdempotentRequests
+            .Where(r => r.IdempotencyKey == idempotencyKey)
+            .ExecuteDeleteAsync();
+        
+        return await CreateOrder(idempotencyKey, request);
+    }
+    
+    return StatusCode(500, new { Error = "Unknown idempotency status" });
+}
+
+private async Task<IActionResult> WaitForCompletionAsync(string idempotencyKey)
+{
+    // Poll for completion (max 30 seconds)
+    for (int i = 0; i < 60; i++)
+    {
+        await Task.Delay(500);
+        
+        var record = await _context.IdempotentRequests
+            .AsNoTracking()
+            .FirstOrDefaultAsync(r => r.IdempotencyKey == idempotencyKey);
+        
+        if (record?.Status == "Completed")
+        {
+            var responseBody = JsonSerializer.Deserialize<object>(record.ResponseBody);
+            return StatusCode(record.StatusCode, responseBody);
+        }
+        
+        if (record?.Status == "Failed")
+        {
+            return StatusCode(500, new { Error = "Previous request failed" });
+        }
+    }
+    
+    return StatusCode(408, new { Error = "Request timeout while processing" });
+}
+
+private string ComputeHash(object request)
+{
+    var json = JsonSerializer.Serialize(request, new JsonSerializerOptions
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    });
+    
+    using var sha256 = SHA256.Create();
+    var bytes = Encoding.UTF8.GetBytes(json);
+    var hash = sha256.ComputeHash(bytes);
+    return Convert.ToBase64String(hash);
+}
+
+private bool IsUniqueConstraintViolation(DbUpdateException ex)
+{
+    return ex.InnerException?.Message?.Contains("unique constraint", 
+        StringComparison.OrdinalIgnoreCase) == true ||
+           ex.InnerException?.Message?.Contains("duplicate key",
+        StringComparison.OrdinalIgnoreCase) == true;
+}
+```
+
+### Database Schema
+
+```sql
+CREATE TABLE IdempotentRequests (
+    IdempotencyKey NVARCHAR(100) NOT NULL PRIMARY KEY,
+    ResourceType NVARCHAR(50) NOT NULL,
+    ResourceId NVARCHAR(100) NULL,
+    RequestHash NVARCHAR(100) NOT NULL,
+    ResponseBody NVARCHAR(MAX) NULL,
+    StatusCode INT NULL,
+    Status NVARCHAR(20) NOT NULL, -- Processing, Completed, Failed
+    CreatedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+    CompletedAt DATETIME2 NULL,
+    
+    INDEX IX_Status_CreatedAt (Status, CreatedAt)
+);
+
+-- Cleanup old records (run periodically)
+DELETE FROM IdempotentRequests
+WHERE Status = 'Completed' 
+AND CreatedAt < DATEADD(day, -7, GETUTCDATE());
+```
+
+### Key Design Decisions
+
+**1. Insert-First Strategy**
+- Attempt to insert idempotency record FIRST
+- Database unique constraint ensures only one succeeds
+- Race condition handled at database level
+
+**2. Request Hash Verification**
+- Prevents using same idempotency key with different payloads
+- Returns 409 Conflict if request body changes
+
+**3. Status Tracking**
+- `Processing`: Request is being handled
+- `Completed`: Response cached and ready
+- `Failed`: Previous attempt failed, allow retry
+
+**4. Cached Response**
+- Store entire response body
+- Subsequent requests get identical response
+- Client can't tell if it's a retry
+
+## Advanced Pattern: Distributed Idempotency with Redis
+
+For high-throughput systems, database writes can be a bottleneck. Use Redis for idempotency tracking:
+
+```csharp
+public class RedisIdempotencyService
+{
+    private readonly IConnectionMultiplexer _redis;
+    private readonly IDatabase _db;
+    private readonly TimeSpan _lockTimeout = TimeSpan.FromSeconds(30);
+    private readonly TimeSpan _cacheExpiry = TimeSpan.FromHours(24);
+    
+    public RedisIdempotencyService(IConnectionMultiplexer redis)
+    {
+        _redis = redis;
+        _db = redis.GetDatabase();
+    }
+    
+    public async Task<IdempotencyResult> TryAcquireAsync(
+        string idempotencyKey, 
+        string requestHash)
+    {
+        var lockKey = $"idempotency:lock:{idempotencyKey}";
+        var dataKey = $"idempotency:data:{idempotencyKey}";
+        var lockValue = Guid.NewGuid().ToString();
+        
+        // Try to acquire lock
+        var acquired = await _db.StringSetAsync(
+            lockKey,
+            lockValue,
+            _lockTimeout,
+            When.NotExists);
+        
+        if (!acquired)
+        {
+            // Check if response already cached
+            var cached = await _db.StringGetAsync(dataKey);
+            if (cached.HasValue)
+            {
+                var result = JsonSerializer.Deserialize<CachedResponse>(cached);
+                
+                // Verify request hasn't changed
+                if (result.RequestHash != requestHash)
+                {
+                    return IdempotencyResult.Conflict(
+                        "Request body changed for same idempotency key");
+                }
+                
+                return IdempotencyResult.Cached(result.ResponseBody, result.StatusCode);
+            }
+            
+            // Still processing - wait
+            return await WaitForCompletionAsync(idempotencyKey, requestHash);
+        }
+        
+        // Lock acquired - proceed with request
+        return IdempotencyResult.Acquired(lockKey, lockValue);
+    }
+    
+    public async Task StoreResponseAsync(
+        string idempotencyKey,
+        string requestHash,
+        string responseBody,
+        int statusCode,
+        string lockKey,
+        string lockValue)
+    {
+        var dataKey = $"idempotency:data:{idempotencyKey}";
+        
+        var cachedResponse = new CachedResponse
+        {
+            RequestHash = requestHash,
+            ResponseBody = responseBody,
+            StatusCode = statusCode,
+            Timestamp = DateTime.UtcNow
+        };
+        
+        var json = JsonSerializer.Serialize(cachedResponse);
+        
+        // Store response
+        await _db.StringSetAsync(dataKey, json, _cacheExpiry);
+        
+        // Release lock
+        await ReleaseLockAsync(lockKey, lockValue);
+    }
+    
+    public async Task ReleaseLockAsync(string lockKey, string lockValue)
+    {
+        // Only release if we own the lock
+        await _db.ScriptEvaluateAsync(@"
+            if redis.call('get', KEYS[1]) == ARGV[1] then
+                return redis.call('del', KEYS[1])
+            else
+                return 0
+            end",
+            new RedisKey[] { lockKey },
+            new RedisValue[] { lockValue });
+    }
+    
+    private async Task<IdempotencyResult> WaitForCompletionAsync(
+        string idempotencyKey,
+        string requestHash)
+    {
+        var dataKey = $"idempotency:data:{idempotencyKey}";
+        
+        for (int i = 0; i < 60; i++)
+        {
+            await Task.Delay(500);
+            
+            var cached = await _db.StringGetAsync(dataKey);
+            if (cached.HasValue)
+            {
+                var result = JsonSerializer.Deserialize<CachedResponse>(cached);
+                
+                if (result.RequestHash != requestHash)
+                {
+                    return IdempotencyResult.Conflict(
+                        "Request body changed for same idempotency key");
+                }
+                
+                return IdempotencyResult.Cached(result.ResponseBody, result.StatusCode);
+            }
+        }
+        
+        return IdempotencyResult.Timeout();
+    }
+}
+
+public class CachedResponse
+{
+    public string RequestHash { get; set; }
+    public string ResponseBody { get; set; }
+    public int StatusCode { get; set; }
+    public DateTime Timestamp { get; set; }
+}
+```
+
+### Using the Redis Service
+
+```csharp
+[HttpPost("api/orders")]
+public async Task<IActionResult> CreateOrder(
+    [FromHeader(Name = "Idempotency-Key")] string idempotencyKey,
+    [FromBody] CreateOrderRequest request)
+{
+    if (string.IsNullOrEmpty(idempotencyKey))
+    {
+        return BadRequest(new { Error = "Idempotency-Key header is required" });
+    }
+    
+    var requestHash = ComputeHash(request);
+    var idempotencyResult = await _idempotencyService
+        .TryAcquireAsync(idempotencyKey, requestHash);
+    
+    // Return cached response
+    if (idempotencyResult.IsCached)
+    {
+        return StatusCode(
+            idempotencyResult.StatusCode, 
+            JsonSerializer.Deserialize<object>(idempotencyResult.ResponseBody));
+    }
+    
+    // Request conflict
+    if (idempotencyResult.IsConflict)
+    {
+        return Conflict(new { Error = idempotencyResult.Message });
+    }
+    
+    // Timeout waiting for other request
+    if (idempotencyResult.IsTimeout)
+    {
+        return StatusCode(408, new { Error = "Request timeout" });
+    }
+    
+    try
+    {
+        // Process request
+        var order = await ProcessOrderAsync(request);
+        
+        var responseBody = JsonSerializer.Serialize(new
+        {
+            OrderId = order.Id,
+            Total = order.Total,
+            PaymentId = order.PaymentId
+        });
+        
+        // Cache response
+        await _idempotencyService.StoreResponseAsync(
+            idempotencyKey,
+            requestHash,
+            responseBody,
+            200,
+            idempotencyResult.LockKey,
+            idempotencyResult.LockValue);
+        
+        return Ok(JsonSerializer.Deserialize<object>(responseBody));
+    }
+    catch (Exception ex)
+    {
+        // Release lock on failure
+        await _idempotencyService.ReleaseLockAsync(
+            idempotencyResult.LockKey,
+            idempotencyResult.LockValue);
+        
+        throw;
+    }
+}
+```
+
+**Benefits of Redis approach:**
+- ⚡ Much faster than database writes
+- 🔥 Handles extremely high throughput
+- 💾 Automatic expiration of old records
+- 🌍 Works across distributed services
+
+**Trade-offs:**
+- Requires Redis infrastructure
+- Lost if Redis restarts (use persistence if needed)
+- More complex error handling
+
+## Client-Side Implementation
+
+Idempotency is a contract between client and server. Here's how clients should generate keys:
+
+### Option 1: Client-Generated UUID
+
+```typescript
+// TypeScript/JavaScript client
+import { v4 as uuidv4 } from 'uuid';
+
+async function createOrder(orderData: CreateOrderRequest) {
+  const idempotencyKey = uuidv4();
+  
+  try {
+    const response = await fetch('https://api.example.com/api/orders', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': idempotencyKey
+      },
+      body: JSON.stringify(orderData)
+    });
+    
+    return await response.json();
+  } catch (error) {
+    // On network error, retry with SAME key
+    if (error.name === 'NetworkError' || error.name === 'TimeoutError') {
+      return retryWithSameKey(orderData, idempotencyKey);
+    }
+    throw error;
+  }
+}
+
+async function retryWithSameKey(
+  orderData: CreateOrderRequest, 
+  idempotencyKey: string,
+  maxRetries: number = 3
+) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch('https://api.example.com/api/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': idempotencyKey
+        },
+        body: JSON.stringify(orderData)
+      });
+      
+      if (response.ok) {
+        return await response.json();
+      }
+      
+      // Server error - retry
+      if (response.status >= 500) {
+        await delay(1000 * Math.pow(2, attempt)); // Exponential backoff
+        continue;
+      }
+      
+      // Client error - don't retry
+      throw new Error(`Request failed: ${response.status}`);
+      
+    } catch (error) {
+      if (attempt === maxRetries) throw error;
+      await delay(1000 * Math.pow(2, attempt));
+    }
+  }
+}
+```
+
+### Option 2: Hash-Based Key (Deterministic)
+
+```csharp
+// C# client
+public class OrderClient
+{
+    private readonly HttpClient _httpClient;
+    
+    public async Task<OrderResponse> CreateOrderAsync(CreateOrderRequest request)
+    {
+        var idempotencyKey = GenerateIdempotencyKey(request);
+        
+        return await ExecuteWithRetryAsync(async () =>
+        {
+            var httpRequest = new HttpRequestMessage(HttpMethod.Post, "/api/orders")
+            {
+                Content = JsonContent.Create(request)
+            };
+            
+            httpRequest.Headers.Add("Idempotency-Key", idempotencyKey);
+            
+            var response = await _httpClient.SendAsync(httpRequest);
+            response.EnsureSuccessStatusCode();
+            
+            return await response.Content.ReadFromJsonAsync<OrderResponse>();
+        });
+    }
+    
+    private string GenerateIdempotencyKey(CreateOrderRequest request)
+    {
+        // Combine business identifiers
+        var keyData = $"{request.CustomerId}:{request.CartId}:{DateTime.UtcNow:yyyyMMdd}";
+        
+        using var sha256 = SHA256.Create();
+        var bytes = Encoding.UTF8.GetBytes(keyData);
+        var hash = sha256.ComputeHash(bytes);
+        
+        return Convert.ToBase64String(hash).Substring(0, 32);
+    }
+    
+    private async Task<T> ExecuteWithRetryAsync<T>(
+        Func<Task<T>> operation,
+        int maxRetries = 3)
+    {
+        for (int attempt = 0; attempt < maxRetries; attempt++)
+        {
+            try
+            {
+                return await operation();
+            }
+            catch (HttpRequestException ex)
+            {
+                if (attempt == maxRetries - 1) throw;
+                
+                var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt));
+                await Task.Delay(delay);
+            }
+        }
+        
+        throw new InvalidOperationException("Should never reach here");
+    }
+}
+```
+
+## Testing Idempotency
+
+Idempotency bugs are hard to catch without proper testing.
+
+### Integration Test Pattern
+
+```csharp
+[Fact]
+public async Task CreateOrder_WithSameIdempotencyKey_ReturnsSameOrder()
+{
+    // Arrange
+    var idempotencyKey = Guid.NewGuid().ToString();
+    var request = new CreateOrderRequest
+    {
+        CustomerId = 123,
+        Items = new[]
+        {
+            new OrderItemRequest { ProductId = 1, Quantity = 2, Price = 10.00m }
+        }
+    };
+    
+    // Act - Make the same request twice
+    var response1 = await _client.PostAsJsonAsync("/api/orders", request, options =>
+    {
+        options.Headers.Add("Idempotency-Key", idempotencyKey);
+    });
+    
+    var response2 = await _client.PostAsJsonAsync("/api/orders", request, options =>
+    {
+        options.Headers.Add("Idempotency-Key", idempotencyKey);
+    });
+    
+    // Assert
+    response1.EnsureSuccessStatusCode();
+    response2.EnsureSuccessStatusCode();
+    
+    var result1 = await response1.Content.ReadFromJsonAsync<OrderResponse>();
+    var result2 = await response2.Content.ReadFromJsonAsync<OrderResponse>();
+    
+    Assert.Equal(result1.OrderId, result2.OrderId);
+    
+    // Verify only one order created
+    var orders = await _context.Orders
+        .Where(o => o.CustomerId == 123)
+        .ToListAsync();
+    
+    Assert.Single(orders);
+}
+
+[Fact]
+public async Task CreateOrder_ConcurrentRequests_CreatesSingleOrder()
+{
+    // Arrange
+    var idempotencyKey = Guid.NewGuid().ToString();
+    var request = new CreateOrderRequest
+    {
+        CustomerId = 456,
+        Items = new[]
+        {
+            new OrderItemRequest { ProductId = 2, Quantity = 5, Price = 20.00m }
+        }
+    };
+    
+    // Act - Fire 10 concurrent requests
+    var tasks = Enumerable.Range(0, 10)
+        .Select(_ => _client.PostAsJsonAsync("/api/orders", request, options =>
+        {
+            options.Headers.Add("Idempotency-Key", idempotencyKey);
+        }))
+        .ToArray();
+    
+    var responses = await Task.WhenAll(tasks);
+    
+    // Assert - All succeed
+    Assert.All(responses, r => r.EnsureSuccessStatusCode());
+    
+    // All return same order ID
+    var results = await Task.WhenAll(
+        responses.Select(r => r.Content.ReadFromJsonAsync<OrderResponse>()));
+    
+    var uniqueOrderIds = results.Select(r => r.OrderId).Distinct().ToList();
+    Assert.Single(uniqueOrderIds);
+    
+    // Only one order in database
+    var orders = await _context.Orders
+        .Where(o => o.CustomerId == 456)
+        .ToListAsync();
+    
+    Assert.Single(orders);
+}
+
+[Fact]
+public async Task CreateOrder_DifferentPayload_SameKey_ReturnsConflict()
+{
+    // Arrange
+    var idempotencyKey = Guid.NewGuid().ToString();
+    
+    var request1 = new CreateOrderRequest
+    {
+        CustomerId = 789,
+        Items = new[] { new OrderItemRequest { ProductId = 1, Quantity = 1, Price = 10m } }
+    };
+    
+    var request2 = new CreateOrderRequest
+    {
+        CustomerId = 789,
+        Items = new[] { new OrderItemRequest { ProductId = 2, Quantity = 2, Price = 20m } }
+    };
+    
+    // Act
+    var response1 = await _client.PostAsJsonAsync("/api/orders", request1, options =>
+    {
+        options.Headers.Add("Idempotency-Key", idempotencyKey);
+    });
+    
+    var response2 = await _client.PostAsJsonAsync("/api/orders", request2, options =>
+    {
+        options.Headers.Add("Idempotency-Key", idempotencyKey);
+    });
+    
+    // Assert
+    response1.EnsureSuccessStatusCode();
+    Assert.Equal(HttpStatusCode.Conflict, response2.StatusCode);
+}
+```
+
+### Load Testing
+
+```csharp
+[Fact]
+public async Task CreateOrder_UnderLoad_MaintainsIdempotency()
+{
+    var totalRequests = 1000;
+    var concurrentBatches = 10;
+    var uniqueOrders = 100; // 10 retries per order
+    
+    var idempotencyKeys = Enumerable.Range(0, uniqueOrders)
+        .Select(_ => Guid.NewGuid().ToString())
+        .ToList();
+    
+    var tasks = Enumerable.Range(0, totalRequests)
+        .Select(i =>
+        {
+            var keyIndex = i % uniqueOrders;
+            var idempotencyKey = idempotencyKeys[keyIndex];
+            
+            return _client.PostAsJsonAsync("/api/orders", new CreateOrderRequest
+            {
+                CustomerId = 1000 + keyIndex,
+                Items = new[] { new OrderItemRequest { ProductId = 1, Quantity = 1, Price = 10m } }
+            }, options =>
+            {
+                options.Headers.Add("Idempotency-Key", idempotencyKey);
+            });
+        })
+        .ToArray();
+    
+    var responses = await Task.WhenAll(tasks);
+    
+    // All requests should succeed
+    Assert.All(responses, r => r.EnsureSuccessStatusCode());
+    
+    // Should have exactly uniqueOrders orders
+    var orderCount = await _context.Orders.CountAsync();
+    Assert.Equal(uniqueOrders, orderCount);
+}
+```
+
+## HTTP Methods and Idempotency
+
+Different HTTP methods have different idempotency guarantees:
+
+| Method | Idempotent by Spec | Reality |
+|--------|-------------------|---------|
+| GET | ✅ Yes | ✅ Usually safe |
+| PUT | ✅ Yes | ⚠️ Depends on implementation |
+| DELETE | ✅ Yes | ⚠️ Depends on implementation |
+| POST | ❌ No | ❌ Must implement explicitly |
+| PATCH | ❌ No | ⚠️ Depends on operation |
+
+### PUT: Idempotent by Design
+
+```csharp
+[HttpPut("api/products/{id}")]
+public async Task<IActionResult> UpdateProduct(int id, [FromBody] ProductUpdateRequest request)
+{
+    var product = await _context.Products.FindAsync(id);
+    if (product == null)
+        return NotFound();
+    
+    // Idempotent - setting to same values multiple times has same effect
+    product.Name = request.Name;
+    product.Price = request.Price;
+    product.StockQuantity = request.StockQuantity;
+    
+    await _context.SaveChangesAsync();
+    
+    return Ok(product);
+}
+```
+
+### DELETE: Idempotent with Proper Status Codes
+
+```csharp
+[HttpDelete("api/products/{id}")]
+public async Task<IActionResult> DeleteProduct(int id)
+{
+    var product = await _context.Products.FindAsync(id);
+    
+    if (product == null)
+    {
+        // First call returns 204, subsequent calls return 404
+        // Some prefer always returning 204 for idempotency
+        return NotFound();
+    }
+    
+    _context.Products.Remove(product);
+    await _context.SaveChangesAsync();
+    
+    return NoContent();
+}
+```
+
+### PATCH: Depends on Operation Type
+
+```csharp
+// NOT idempotent - increments every time
+[HttpPatch("api/products/{id}/increment-stock")]
+public async Task<IActionResult> IncrementStock(int id, [FromBody] int quantity)
+{
+    var product = await _context.Products.FindAsync(id);
+    product.StockQuantity += quantity; // DANGER!
+    await _context.SaveChangesAsync();
+    return Ok(product);
+}
+
+// Idempotent - sets absolute value
+[HttpPatch("api/products/{id}/set-stock")]
+public async Task<IActionResult> SetStock(int id, [FromBody] int quantity)
+{
+    var product = await _context.Products.FindAsync(id);
+    product.StockQuantity = quantity; // Safe
+    await _context.SaveChangesAsync();
+    return Ok(product);
+}
+```
+
+## Monitoring and Observability
+
+Track idempotency in production:
+
+```csharp
+public class IdempotencyMetrics
+{
+    private readonly ILogger<IdempotencyMetrics> _logger;
+    private readonly IMetricsCollector _metrics;
+    
+    public async Task<IActionResult> TrackIdempotentRequestAsync(
+        string idempotencyKey,
+        Func<Task<IActionResult>> handler)
+    {
+        var sw = Stopwatch.StartNew();
+        var outcome = "success";
+        var wasRetry = false;
+        
+        try
+        {
+            // Check if this is a retry
+            var existing = await CheckExistingAsync(idempotencyKey);
+            if (existing != null)
+            {
+                wasRetry = true;
+                _logger.LogInformation(
+                    "Idempotent retry detected. Key: {IdempotencyKey}, OriginalTime: {OriginalTime}",
+                    idempotencyKey,
+                    existing.CreatedAt);
+            }
+            
+            var result = await handler();
+            return result;
+        }
+        catch (Exception ex)
+        {
+            outcome = "failure";
+            _logger.LogError(ex,
+                "Idempotent request failed. Key: {IdempotencyKey}",
+                idempotencyKey);
+            throw;
+        }
+        finally
+        {
+            sw.Stop();
+            
+            // Track metrics
+            _metrics.Increment("idempotency.requests.total", new Dictionary<string, string>
+            {
+                ["outcome"] = outcome,
+                ["was_retry"] = wasRetry.ToString()
+            });
+            
+            _metrics.Histogram("idempotency.request.duration", sw.ElapsedMilliseconds);
+            
+            if (wasRetry)
+            {
+                _metrics.Increment("idempotency.retries.total");
+            }
+        }
+    }
+}
+```
+
+### Dashboard Queries
+
+```kusto
+// Application Insights KQL - Track retry rate
+requests
+| where customDimensions.IdempotencyKey != ""
+| summarize 
+    TotalRequests = count(),
+    UniqueKeys = dcount(customDimensions.IdempotencyKey)
+| extend RetryRate = (TotalRequests - UniqueKeys) * 100.0 / TotalRequests
+| project RetryRate, TotalRequests, UniqueKeys
+
+// Find problematic endpoints with high retry rates
+requests
+| where customDimensions.IdempotencyKey != ""
+| summarize 
+    TotalCalls = count(),
+    UniqueKeys = dcount(customDimensions.IdempotencyKey)
+    by name
+| extend RetryRate = (TotalCalls - UniqueKeys) * 100.0 / TotalCalls
+| where RetryRate > 10
+| order by RetryRate desc
+```
+
+## Common Pitfalls and Solutions
+
+### Pitfall 1: Idempotency Key Expiration
+
+**Problem:** Keys expire, client retries with expired key, creates duplicate.
+
+**Solution:** Make expiration long enough (24-72 hours) or indefinite for critical operations:
+
+```csharp
+// Configure per operation type
+public class IdempotencyConfiguration
+{
+    public Dictionary<string, TimeSpan> ExpirationByResourceType { get; } = new()
+    {
+        ["Order"] = TimeSpan.FromDays(7),      // Critical - keep long
+        ["Newsletter"] = TimeSpan.FromHours(1), // Non-critical
+        ["Analytics"] = TimeSpan.FromMinutes(5) // Idempotent anyway
+    };
+}
+```
+
+### Pitfall 2: Forgetting Side Effects
+
+**Problem:** Order created once, but email sent multiple times.
+
+**Solution:** Make side effects idempotent too:
+
+```csharp
+public class IdempotentEmailService
+{
+    private readonly IDistributedCache _cache;
+    
+    public async Task SendOrderConfirmationAsync(Order order)
+    {
+        var cacheKey = $"email_sent:order:{order.Id}";
+        
+        // Check if already sent
+        var alreadySent = await _cache.GetStringAsync(cacheKey);
+        if (alreadySent != null)
+        {
+            _logger.LogInformation("Email already sent for order {OrderId}", order.Id);
+            return;
+        }
+        
+        // Send email
+        await _emailProvider.SendAsync(new Email
+        {
+            To = order.CustomerEmail,
+            Subject = $"Order Confirmation #{order.Id}",
+            Body = GenerateEmailBody(order)
+        });
+        
+        // Mark as sent (expire after 30 days)
+        await _cache.SetStringAsync(
+            cacheKey, 
+            "true",
+            new DistributedCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(30)
+            });
+    }
+}
+```
+
+### Pitfall 3: Distributed System Clock Skew
+
+**Problem:** Two servers with different clocks create race conditions.
+
+**Solution:** Use database timestamps or distributed sequence numbers:
+
+```csharp
+// Instead of DateTime.UtcNow
+public class Order
+{
+    public int Id { get; set; }
+    
+    [DatabaseGenerated(DatabaseGeneratedOption.Computed)]
+    public DateTime CreatedAt { get; set; } // Let database set this
+}
+
+// SQL Server
+CREATE TABLE Orders (
+    Id INT PRIMARY KEY IDENTITY,
+    CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+);
+```
+
+## Decision Framework: When to Implement Idempotency
+
+| Scenario | Idempotency Required? |
+|----------|----------------------|
+| Creating financial records | ✅ Absolutely |
+| Sending money/payments | ✅ Absolutely |
+| Creating user accounts | ✅ Strongly recommended |
+| E-commerce orders | ✅ Strongly recommended |
+| Sending notifications | ⚠️ Recommended |
+| Analytics events | ⚠️ Consider (or make naturally idempotent) |
+| Read-only operations | ❌ Not needed (GET is idempotent) |
+| Internal batch jobs | ❌ Usually not needed |
+
+## Key Takeaways
+
+1. **Every production system will experience retries** - network failures, timeouts, and client errors are inevitable. Design for it from day one.
+
+2. **Idempotency keys are non-negotiable for critical operations** - any operation that moves money, creates records, or has side effects must be idempotent.
+
+3. **Database constraints are your safety net** - unique constraints on idempotency keys prevent race conditions at the lowest level.
+
+4. **Test concurrent requests explicitly** - idempotency bugs don't appear in sequential tests. Load test with duplicate requests.
+
+5. **Make side effects idempotent too** - sending the same email 10 times is almost as bad as charging a customer 10 times.
+
+6. **Monitor retry rates** - high retry rates indicate network issues, timeout misconfigurations, or client bugs.
+
+7. **Redis scales better than databases** - for high-throughput systems, distributed caching handles idempotency checks faster than database writes.
+
+The difference between a senior engineer and a junior engineer isn't knowing what idempotency is - it's remembering to implement it before the 2 AM production alert about duplicate charges.

@@ -1,0 +1,982 @@
+---
+slug: "race-condition-silent-bug-breaks-production"
+title: "Race Condition: The Silent Bug That Breaks Production Systems"
+date: "2025-12-01"
+description: "Learn how race conditions crash production systems, cause data corruption, and how to prevent them using locks, transactions, and proven patterns."
+tags: [
+  "race-condition",
+  "concurrency",
+  "thread-safety",
+  "dotnet",
+  "aspnet-core",
+  "backend-development",
+  "system-design"
+]
+author: "Steve Bang"
+readingTime: "12 min read"
+image: "/images/race-condition-silent-bug-breaks-production.jpg"
+---
+
+# Race Condition: The Silent Bug That Breaks Production Systems
+
+You deploy your application to production. Everything works perfectly in testing. Then, at 2 AM, you get the alert: **duplicate orders**, **negative inventory counts**, **corrupted financial records**. You check the logs—nothing unusual. You review the code—it looks correct. Welcome to the world of race conditions, the most elusive and dangerous bugs in concurrent systems.
+
+Race conditions are particularly insidious because they're **non-deterministic**. They might occur once in a thousand requests, making them nearly impossible to reproduce in development but devastating in production where you're handling thousands of concurrent users.
+
+In this post, I'll show you real-world race condition scenarios I've encountered in production systems, explain why they happen, and share battle-tested solutions to prevent them.
+
+## What Is a Race Condition?
+
+A race condition occurs when **two or more threads access shared resources concurrently**, and the final outcome depends on the unpredictable timing of their execution. The "race" refers to threads competing to complete their operations first, and the result varies based on which thread wins.
+
+Think of it like two people trying to withdraw the last $100 from a shared bank account simultaneously. Both check the balance ($100), both see sufficient funds, both approve the withdrawal. Now you have -$100 in the account and two angry customers.
+
+### The Anatomy of a Race Condition
+
+Every race condition follows this pattern:
+
+1. **Check** - Thread A reads shared state
+2. **Context Switch** - Operating system switches to Thread B
+3. **Check** - Thread B reads the same shared state (now stale)
+4. **Modify** - Thread B modifies based on stale data
+5. **Context Switch** - Back to Thread A
+6. **Modify** - Thread A modifies based on its stale data
+7. **Corruption** - State is now inconsistent
+
+The critical problem: the **check-then-act** pattern is not atomic.
+
+## Real-World Scenario 1: E-Commerce Inventory Disaster
+
+Let me show you a real scenario that cost a client $50,000 in oversold inventory during a flash sale.
+
+### The Vulnerable Code
+
+```csharp
+public class OrderService
+{
+    private readonly AppDbContext _context;
+    
+    public async Task<OrderResult> CreateOrderAsync(int productId, int quantity)
+    {
+        // Step 1: Check inventory
+        var product = await _context.Products
+            .FirstOrDefaultAsync(p => p.Id == productId);
+            
+        if (product.StockQuantity < quantity)
+        {
+            return OrderResult.InsufficientStock();
+        }
+        
+        // Step 2: Create order
+        var order = new Order
+        {
+            ProductId = productId,
+            Quantity = quantity,
+            TotalAmount = product.Price * quantity
+        };
+        
+        _context.Orders.Add(order);
+        
+        // Step 3: Update inventory
+        product.StockQuantity -= quantity;
+        
+        await _context.SaveChangesAsync();
+        
+        return OrderResult.Success(order);
+    }
+}
+```
+
+**What's wrong with this code?**
+
+When 100 users simultaneously try to buy the last 10 items:
+
+1. All 100 requests read `StockQuantity = 10` (passed the check)
+2. All 100 requests create orders
+3. All 100 requests subtract from inventory
+4. Final inventory: `-90` items sold
+
+### Solution 1: Pessimistic Locking (Row-Level Lock)
+
+```csharp
+public async Task<OrderResult> CreateOrderAsync(int productId, int quantity)
+{
+    using var transaction = await _context.Database.BeginTransactionAsync();
+    
+    try
+    {
+        // Lock the row for update - blocks other transactions
+        var product = await _context.Products
+            .FromSqlRaw(@"
+                SELECT * FROM Products WITH (UPDLOCK, ROWLOCK)
+                WHERE Id = {0}", productId)
+            .FirstOrDefaultAsync();
+        
+        if (product == null)
+            return OrderResult.NotFound();
+            
+        if (product.StockQuantity < quantity)
+            return OrderResult.InsufficientStock();
+        
+        var order = new Order
+        {
+            ProductId = productId,
+            Quantity = quantity,
+            TotalAmount = product.Price * quantity
+        };
+        
+        _context.Orders.Add(order);
+        product.StockQuantity -= quantity;
+        
+        await _context.SaveChangesAsync();
+        await transaction.CommitAsync();
+        
+        return OrderResult.Success(order);
+    }
+    catch
+    {
+        await transaction.RollbackAsync();
+        throw;
+    }
+}
+```
+
+**How it works:**
+- `UPDLOCK` prevents other transactions from reading or locking the row
+- `ROWLOCK` ensures only this specific row is locked (not the entire table)
+- Other requests wait until the lock is released
+- Guarantees serialized access to inventory
+
+**Trade-off:** Reduced concurrency (threads wait), but guaranteed correctness.
+
+### Solution 2: Optimistic Concurrency (Version Token)
+
+```csharp
+public class Product
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public int StockQuantity { get; set; }
+    
+    [Timestamp] // EF Core concurrency token
+    public byte[] RowVersion { get; set; }
+}
+
+public async Task<OrderResult> CreateOrderAsync(int productId, int quantity)
+{
+    const int maxRetries = 3;
+    int attempt = 0;
+    
+    while (attempt < maxRetries)
+    {
+        try
+        {
+            var product = await _context.Products
+                .FirstOrDefaultAsync(p => p.Id == productId);
+            
+            if (product == null)
+                return OrderResult.NotFound();
+                
+            if (product.StockQuantity < quantity)
+                return OrderResult.InsufficientStock();
+            
+            var order = new Order
+            {
+                ProductId = productId,
+                Quantity = quantity,
+                TotalAmount = product.Price * quantity
+            };
+            
+            _context.Orders.Add(order);
+            product.StockQuantity -= quantity;
+            
+            // This will throw DbUpdateConcurrencyException
+            // if RowVersion changed since we read it
+            await _context.SaveChangesAsync();
+            
+            return OrderResult.Success(order);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            attempt++;
+            if (attempt >= maxRetries)
+                return OrderResult.ConcurrencyConflict();
+            
+            // Exponential backoff
+            await Task.Delay(100 * attempt);
+            
+            // Retry with fresh data
+            _context.ChangeTracker.Clear();
+        }
+    }
+    
+    return OrderResult.ConcurrencyConflict();
+}
+```
+
+**How it works:**
+- `RowVersion` automatically increments on every update
+- EF Core generates SQL: `UPDATE Products SET ... WHERE Id = @id AND RowVersion = @version`
+- If `RowVersion` changed, update affects 0 rows → exception thrown
+- Retry with fresh data
+
+**Trade-off:** Better concurrency, but requires retry logic and potential user-facing conflicts.
+
+### Solution 3: Database-Level Atomic Operations
+
+```csharp
+public async Task<OrderResult> CreateOrderAsync(int productId, int quantity)
+{
+    using var transaction = await _context.Database.BeginTransactionAsync();
+    
+    try
+    {
+        // Atomic decrement with check
+        var rowsAffected = await _context.Database.ExecuteSqlRawAsync(@"
+            UPDATE Products
+            SET StockQuantity = StockQuantity - {0}
+            WHERE Id = {1}
+            AND StockQuantity >= {0}",
+            quantity, productId);
+        
+        if (rowsAffected == 0)
+        {
+            // Either product doesn't exist or insufficient stock
+            var product = await _context.Products.FindAsync(productId);
+            if (product == null)
+                return OrderResult.NotFound();
+            return OrderResult.InsufficientStock();
+        }
+        
+        var order = new Order
+        {
+            ProductId = productId,
+            Quantity = quantity,
+            TotalAmount = await GetProductPriceAsync(productId) * quantity
+        };
+        
+        _context.Orders.Add(order);
+        await _context.SaveChangesAsync();
+        await transaction.CommitAsync();
+        
+        return OrderResult.Success(order);
+    }
+    catch
+    {
+        await transaction.RollbackAsync();
+        throw;
+    }
+}
+```
+
+**Why this is superior:**
+- Single atomic operation at database level
+- Check and update happen in one statement
+- No lock waiting time
+- Highest performance under high concurrency
+
+## Real-World Scenario 2: Double Payment Processing
+
+Another common race condition I've seen involves payment processing systems where a user clicks "Pay" multiple times due to slow response.
+
+### The Vulnerable Code
+
+```csharp
+public class PaymentService
+{
+    private readonly AppDbContext _context;
+    private readonly IPaymentGateway _gateway;
+    
+    public async Task<PaymentResult> ProcessPaymentAsync(Guid orderId, decimal amount)
+    {
+        // Check if already paid
+        var existingPayment = await _context.Payments
+            .FirstOrDefaultAsync(p => p.OrderId == orderId);
+            
+        if (existingPayment != null)
+        {
+            return PaymentResult.AlreadyPaid();
+        }
+        
+        // Process with payment gateway
+        var gatewayResponse = await _gateway.ChargeAsync(amount);
+        
+        if (!gatewayResponse.Success)
+        {
+            return PaymentResult.Failed(gatewayResponse.Error);
+        }
+        
+        // Save payment record
+        var payment = new Payment
+        {
+            OrderId = orderId,
+            Amount = amount,
+            TransactionId = gatewayResponse.TransactionId,
+            Status = PaymentStatus.Completed
+        };
+        
+        _context.Payments.Add(payment);
+        await _context.SaveChangesAsync();
+        
+        return PaymentResult.Success(payment);
+    }
+}
+```
+
+**The problem:**
+
+Two simultaneous requests both pass the "already paid" check, both charge the customer, both save payment records. Customer gets charged twice.
+
+### Solution: Distributed Lock with Redis
+
+```csharp
+public class PaymentService
+{
+    private readonly AppDbContext _context;
+    private readonly IPaymentGateway _gateway;
+    private readonly IDistributedLockService _lockService;
+    
+    public async Task<PaymentResult> ProcessPaymentAsync(Guid orderId, decimal amount)
+    {
+        var lockKey = $"payment:order:{orderId}";
+        var lockExpiry = TimeSpan.FromSeconds(30);
+        
+        // Try to acquire distributed lock
+        var lockAcquired = await _lockService.TryAcquireLockAsync(
+            lockKey, 
+            lockExpiry);
+        
+        if (!lockAcquired)
+        {
+            return PaymentResult.ProcessingInProgress();
+        }
+        
+        try
+        {
+            // Check if already paid (double-check after acquiring lock)
+            var existingPayment = await _context.Payments
+                .FirstOrDefaultAsync(p => p.OrderId == orderId);
+                
+            if (existingPayment != null)
+            {
+                return PaymentResult.AlreadyPaid();
+            }
+            
+            // Process with payment gateway
+            var gatewayResponse = await _gateway.ChargeAsync(amount);
+            
+            if (!gatewayResponse.Success)
+            {
+                return PaymentResult.Failed(gatewayResponse.Error);
+            }
+            
+            // Save payment record
+            var payment = new Payment
+            {
+                OrderId = orderId,
+                Amount = amount,
+                TransactionId = gatewayResponse.TransactionId,
+                Status = PaymentStatus.Completed
+            };
+            
+            _context.Payments.Add(payment);
+            await _context.SaveChangesAsync();
+            
+            return PaymentResult.Success(payment);
+        }
+        finally
+        {
+            await _lockService.ReleaseLockAsync(lockKey);
+        }
+    }
+}
+```
+
+### Implementing Distributed Lock with StackExchange.Redis
+
+```csharp
+public class RedisDistributedLockService : IDistributedLockService
+{
+    private readonly IConnectionMultiplexer _redis;
+    
+    public RedisDistributedLockService(IConnectionMultiplexer redis)
+    {
+        _redis = redis;
+    }
+    
+    public async Task<bool> TryAcquireLockAsync(string key, TimeSpan expiry)
+    {
+        var db = _redis.GetDatabase();
+        var lockValue = Guid.NewGuid().ToString();
+        
+        // SET key value NX EX seconds
+        // NX = only set if key doesn't exist
+        // EX = set expiry
+        return await db.StringSetAsync(
+            key, 
+            lockValue, 
+            expiry, 
+            When.NotExists);
+    }
+    
+    public async Task ReleaseLockAsync(string key)
+    {
+        var db = _redis.GetDatabase();
+        await db.KeyDeleteAsync(key);
+    }
+}
+```
+
+**Why distributed locks:**
+- Works across multiple application instances
+- Prevents concurrent processing across servers
+- Auto-expires to prevent deadlocks if server crashes
+- Essential for microservices and scaled applications
+
+## Real-World Scenario 3: Cache Stampede
+
+A subtle but devastating race condition occurs with caching systems during cache expiration.
+
+### The Problem: Cache Stampede
+
+```csharp
+public class ProductService
+{
+    private readonly IMemoryCache _cache;
+    private readonly AppDbContext _context;
+    
+    public async Task<Product> GetProductAsync(int productId)
+    {
+        var cacheKey = $"product:{productId}";
+        
+        if (_cache.TryGetValue(cacheKey, out Product cachedProduct))
+        {
+            return cachedProduct;
+        }
+        
+        // Cache miss - fetch from database
+        var product = await _context.Products
+            .Include(p => p.Reviews)
+            .Include(p => p.Images)
+            .FirstOrDefaultAsync(p => p.Id == productId);
+        
+        _cache.Set(cacheKey, product, TimeSpan.FromMinutes(10));
+        
+        return product;
+    }
+}
+```
+
+**The stampede:**
+
+When cache expires and 1,000 concurrent requests arrive, all 1,000 requests miss the cache and simultaneously query the database, causing massive load spikes and potential database crashes.
+
+### Solution: Lock-Based Cache Pattern
+
+```csharp
+public class ProductService
+{
+    private readonly IMemoryCache _cache;
+    private readonly AppDbContext _context;
+    private readonly SemaphoreSlim _semaphore = new SemaphoreSlim(1, 1);
+    
+    public async Task<Product> GetProductAsync(int productId)
+    {
+        var cacheKey = $"product:{productId}";
+        
+        if (_cache.TryGetValue(cacheKey, out Product cachedProduct))
+        {
+            return cachedProduct;
+        }
+        
+        // Only one thread rebuilds cache
+        await _semaphore.WaitAsync();
+        
+        try
+        {
+            // Double-check after acquiring lock
+            if (_cache.TryGetValue(cacheKey, out cachedProduct))
+            {
+                return cachedProduct;
+            }
+            
+            // Fetch from database
+            var product = await _context.Products
+                .Include(p => p.Reviews)
+                .Include(p => p.Images)
+                .FirstOrDefaultAsync(p => p.Id == productId);
+            
+            _cache.Set(cacheKey, product, TimeSpan.FromMinutes(10));
+            
+            return product;
+        }
+        finally
+        {
+            _semaphore.Release();
+        }
+    }
+}
+```
+
+**Better: Per-Key Locking**
+
+```csharp
+public class ProductService
+{
+    private readonly IMemoryCache _cache;
+    private readonly AppDbContext _context;
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new();
+    
+    public async Task<Product> GetProductAsync(int productId)
+    {
+        var cacheKey = $"product:{productId}";
+        
+        if (_cache.TryGetValue(cacheKey, out Product cachedProduct))
+        {
+            return cachedProduct;
+        }
+        
+        // Get or create semaphore for this specific key
+        var semaphore = _locks.GetOrAdd(cacheKey, _ => new SemaphoreSlim(1, 1));
+        
+        await semaphore.WaitAsync();
+        
+        try
+        {
+            // Double-check after acquiring lock
+            if (_cache.TryGetValue(cacheKey, out cachedProduct))
+            {
+                return cachedProduct;
+            }
+            
+            // Fetch from database
+            var product = await _context.Products
+                .Include(p => p.Reviews)
+                .Include(p => p.Images)
+                .FirstOrDefaultAsync(p => p.Id == productId);
+            
+            _cache.Set(cacheKey, product, TimeSpan.FromMinutes(10));
+            
+            return product;
+        }
+        finally
+        {
+            semaphore.Release();
+            
+            // Cleanup: remove semaphore if no one is waiting
+            if (semaphore.CurrentCount == 1)
+            {
+                _locks.TryRemove(cacheKey, out _);
+            }
+        }
+    }
+}
+```
+
+**Why per-key locking:**
+- Different products can be fetched concurrently
+- Only blocks requests for the same expired cache key
+- Much better throughput than global locking
+
+## In-Memory Race Conditions: Static Fields and Singletons
+
+Race conditions aren't just about databases. In-memory shared state is equally dangerous.
+
+### The Vulnerable Code
+
+```csharp
+public class RequestCounter
+{
+    private static int _totalRequests = 0;
+    
+    public static void IncrementRequests()
+    {
+        // This is NOT thread-safe!
+        _totalRequests++;
+    }
+    
+    public static int GetTotalRequests()
+    {
+        return _totalRequests;
+    }
+}
+```
+
+**The problem:**
+
+The `++` operator is not atomic. It's actually three operations:
+
+1. Read `_totalRequests`
+2. Add 1
+3. Write back to `_totalRequests`
+
+With 10,000 concurrent increments, you might end up with 8,743 instead of 10,000.
+
+### Solution 1: Interlocked Operations
+
+```csharp
+public class RequestCounter
+{
+    private static int _totalRequests = 0;
+    
+    public static void IncrementRequests()
+    {
+        // Atomic increment
+        Interlocked.Increment(ref _totalRequests);
+    }
+    
+    public static int GetTotalRequests()
+    {
+        // Atomic read
+        return Interlocked.CompareExchange(ref _totalRequests, 0, 0);
+    }
+}
+```
+
+### Solution 2: Lock Statement
+
+```csharp
+public class RequestCounter
+{
+    private static int _totalRequests = 0;
+    private static readonly object _lock = new object();
+    
+    public static void IncrementRequests()
+    {
+        lock (_lock)
+        {
+            _totalRequests++;
+        }
+    }
+    
+    public static int GetTotalRequests()
+    {
+        lock (_lock)
+        {
+            return _totalRequests;
+        }
+    }
+}
+```
+
+**When to use which:**
+- **Interlocked**: Simple atomic operations (increment, decrement, compare-and-swap)
+- **Lock**: Complex operations involving multiple fields or logic
+
+## Debugging Race Conditions in Production
+
+Race conditions are notoriously hard to debug because they're non-deterministic. Here's my toolkit:
+
+### 1. Correlation IDs and Distributed Tracing
+
+```csharp
+public class OrderService
+{
+    private readonly ILogger<OrderService> _logger;
+    
+    public async Task<OrderResult> CreateOrderAsync(int productId, int quantity)
+    {
+        var correlationId = Guid.NewGuid().ToString();
+        
+        _logger.LogInformation(
+            "[{CorrelationId}] Starting order creation for ProductId: {ProductId}, Quantity: {Quantity}",
+            correlationId, productId, quantity);
+        
+        using var transaction = await _context.Database.BeginTransactionAsync();
+        
+        try
+        {
+            _logger.LogInformation(
+                "[{CorrelationId}] Acquiring lock for ProductId: {ProductId}",
+                correlationId, productId);
+            
+            var product = await _context.Products
+                .FromSqlRaw("SELECT * FROM Products WITH (UPDLOCK, ROWLOCK) WHERE Id = {0}", productId)
+                .FirstOrDefaultAsync();
+            
+            _logger.LogInformation(
+                "[{CorrelationId}] Lock acquired. Current stock: {Stock}",
+                correlationId, product?.StockQuantity);
+            
+            // ... rest of the logic
+            
+            await transaction.CommitAsync();
+            
+            _logger.LogInformation(
+                "[{CorrelationId}] Order created successfully. OrderId: {OrderId}",
+                correlationId, order.Id);
+            
+            return OrderResult.Success(order);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "[{CorrelationId}] Order creation failed",
+                correlationId);
+            
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+}
+```
+
+### 2. Database Deadlock Detection
+
+```sql
+-- SQL Server: Check for deadlocks
+SELECT 
+    DTL.resource_type,
+    DTL.request_mode,
+    DTL.request_status,
+    OBJECT_NAME(P.object_id) AS TableName,
+    S.session_id,
+    S.login_name,
+    S.host_name,
+    S.program_name
+FROM sys.dm_tran_locks DTL
+INNER JOIN sys.dm_exec_sessions S ON DTL.request_session_id = S.session_id
+INNER JOIN sys.partitions P ON DTL.resource_associated_entity_id = P.hobt_id
+WHERE DTL.request_status = 'WAIT'
+ORDER BY DTL.request_session_id;
+```
+
+### 3. Application Insights Custom Metrics
+
+```csharp
+public class OrderService
+{
+    private readonly TelemetryClient _telemetry;
+    
+    public async Task<OrderResult> CreateOrderAsync(int productId, int quantity)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        
+        try
+        {
+            var result = await CreateOrderInternalAsync(productId, quantity);
+            
+            stopwatch.Stop();
+            
+            _telemetry.TrackMetric(
+                "OrderCreationTime",
+                stopwatch.ElapsedMilliseconds,
+                new Dictionary<string, string>
+                {
+                    { "ProductId", productId.ToString() },
+                    { "Success", result.IsSuccess.ToString() }
+                });
+            
+            return result;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            _telemetry.TrackEvent("ConcurrencyConflict",
+                new Dictionary<string, string>
+                {
+                    { "ProductId", productId.ToString() },
+                    { "Quantity", quantity.ToString() }
+                });
+            
+            throw;
+        }
+    }
+}
+```
+
+## Best Practices: Preventing Race Conditions
+
+Based on years of building high-concurrency systems, here are my core principles:
+
+### 1. Make Operations Atomic at the Lowest Level
+
+Push atomicity down to the database whenever possible. A single SQL statement is atomic by definition.
+
+```csharp
+// BAD: Read-modify-write cycle
+var user = await _context.Users.FindAsync(userId);
+user.Credits += amount;
+await _context.SaveChangesAsync();
+
+// GOOD: Atomic database operation
+await _context.Database.ExecuteSqlRawAsync(
+    "UPDATE Users SET Credits = Credits + {0} WHERE Id = {1}",
+    amount, userId);
+```
+
+### 2. Use Database Transactions with Appropriate Isolation Levels
+
+```csharp
+public async Task TransferFundsAsync(int fromAccountId, int toAccountId, decimal amount)
+{
+    var options = new DbContextOptionsBuilder<AppDbContext>()
+        .UseSqlServer("connection-string")
+        .Options;
+    
+    using var context = new AppDbContext(options);
+    
+    // Serializable: Highest isolation, prevents all anomalies
+    using var transaction = await context.Database.BeginTransactionAsync(
+        IsolationLevel.Serializable);
+    
+    try
+    {
+        var fromAccount = await context.Accounts.FindAsync(fromAccountId);
+        var toAccount = await context.Accounts.FindAsync(toAccountId);
+        
+        if (fromAccount.Balance < amount)
+            throw new InvalidOperationException("Insufficient funds");
+        
+        fromAccount.Balance -= amount;
+        toAccount.Balance += amount;
+        
+        await context.SaveChangesAsync();
+        await transaction.CommitAsync();
+    }
+    catch
+    {
+        await transaction.RollbackAsync();
+        throw;
+    }
+}
+```
+
+### 3. Design for Idempotency
+
+Make operations safe to retry by using idempotency keys.
+
+```csharp
+public class PaymentRequest
+{
+    public Guid IdempotencyKey { get; set; } // Client-generated
+    public Guid OrderId { get; set; }
+    public decimal Amount { get; set; }
+}
+
+public async Task<PaymentResult> ProcessPaymentAsync(PaymentRequest request)
+{
+    // Check if this idempotency key was already processed
+    var existing = await _context.Payments
+        .FirstOrDefaultAsync(p => p.IdempotencyKey == request.IdempotencyKey);
+    
+    if (existing != null)
+    {
+        // Return the previous result (idempotent)
+        return PaymentResult.Success(existing);
+    }
+    
+    // Process payment and store with idempotency key
+    var payment = new Payment
+    {
+        IdempotencyKey = request.IdempotencyKey,
+        OrderId = request.OrderId,
+        Amount = request.Amount
+    };
+    
+    // ... process payment
+    
+    return PaymentResult.Success(payment);
+}
+```
+
+### 4. Use Message Queues for Sequential Processing
+
+For operations that must be processed in order, use message queues.
+
+```csharp
+public class OrderProcessingService : BackgroundService
+{
+    private readonly IServiceProvider _services;
+    
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        await using var scope = _services.CreateAsyncScope();
+        var queueClient = scope.ServiceProvider.GetRequiredService<QueueClient>();
+        
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            var messages = await queueClient.ReceiveMessagesAsync(
+                maxMessages: 1,
+                cancellationToken: stoppingToken);
+            
+            foreach (var message in messages)
+            {
+                try
+                {
+                    var order = JsonSerializer.Deserialize<Order>(message.Body);
+                    await ProcessOrderAsync(order);
+                    
+                    await queueClient.DeleteMessageAsync(
+                        message.MessageId,
+                        message.PopReceipt);
+                }
+                catch (Exception ex)
+                {
+                    // Log error, message will be retried
+                    _logger.LogError(ex, "Failed to process order");
+                }
+            }
+        }
+    }
+}
+```
+
+### 5. Load Test with Realistic Concurrency
+
+Race conditions often only appear under load. Use tools like k6, JMeter, or NBomber to simulate concurrent users.
+
+```csharp
+// NBomber load test
+var scenario = Scenario.Create("order_creation", async context =>
+{
+    var productId = Random.Shared.Next(1, 100);
+    var quantity = Random.Shared.Next(1, 5);
+    
+    var request = Http.CreateRequest("POST", "https://api.example.com/orders")
+        .WithHeader("Content-Type", "application/json")
+        .WithBody(new StringContent(
+            JsonSerializer.Serialize(new { productId, quantity })));
+    
+    var response = await Http.Send(request, context);
+    
+    return response;
+})
+.WithLoadSimulations(
+    Simulation.RampingInject(
+        rate: 100,
+        interval: TimeSpan.FromSeconds(1),
+        during: TimeSpan.FromMinutes(5))
+);
+
+NBomberRunner
+    .RegisterScenarios(scenario)
+    .Run();
+```
+
+## Conclusion
+
+Race conditions are among the most dangerous bugs in production systems because they're:
+
+- **Non-deterministic** - Appear randomly under load
+- **Hard to reproduce** - Work fine in testing, fail in production
+- **Data corrupting** - Can cause financial loss and data integrity issues
+- **Silent** - No stack traces, no obvious errors
+
+The key takeaways:
+
+1. **Never trust check-then-act patterns** - Make operations atomic
+2. **Use database-level locking** - Pessimistic or optimistic concurrency
+3. **Implement distributed locks** - Essential for scaled applications
+4. **Design for idempotency** - Make operations safe to retry
+5. **Load test aggressively** - Simulate real production concurrency
+
+Remember: if your application handles concurrent requests (which it almost certainly does), you need to actively design for concurrency safety. Don't wait for production incidents to teach you these lessons the hard way.
+
+Have you encountered race conditions in your production systems? What solutions worked for you? Share your experiences in the comments below.
+
+---
+
+**Resources:**
+- [Microsoft Docs: Concurrency in EF Core](https://docs.microsoft.com/en-us/ef/core/saving/concurrency)
+- [SQL Server Transaction Locking and Row Versioning Guide](https://docs.microsoft.com/en-us/sql/relational-databases/sql-server-transaction-locking-and-row-versioning-guide)
+- [Redis Distributed Locks](https://redis.io/docs/manual/patterns/distributed-locks/)

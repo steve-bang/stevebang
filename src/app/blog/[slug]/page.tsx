@@ -137,7 +137,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
   //const headings = await extractHeadings(post.content);
 
   return (
-    <article className="pt-28 pb-20">
+    <section className="pt-28 pb-20">
       {/* JSON-LD Structured Data */}
       <script
         type="application/ld+json"
@@ -152,7 +152,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
             className="inline-flex items-center text-gray-600 hover:text-primary transition-colors"
           >
             <FiArrowLeft className="mr-2" />
-            Back to Blog
+            Back to blogs
           </Link>
         </nav>
 
@@ -224,6 +224,6 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
         </footer>
       </div>
 
-    </article>
+    </section>
   );
 }
