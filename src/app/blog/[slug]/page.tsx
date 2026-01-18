@@ -8,7 +8,7 @@ import Image from 'next/image';
 import remarkGfm from 'remark-gfm';
 import GoogleAdsBanner from '@/components/GoogleAdsBanner';
 import rehypeSlug from 'rehype-slug'
-import { FaGlobe, FaGlobeAmericas, FaUserAlt } from 'react-icons/fa';
+import { FaGlobeAmericas, FaUserAlt } from 'react-icons/fa';
 
 export interface BlogPost {
   slug: string;
@@ -20,6 +20,7 @@ export interface BlogPost {
   content: string;
   tags: string[];
   readingTime: string;
+  schemaJsonLD?: string;
 }
 
 interface BlogPostPageProps {
@@ -88,7 +89,7 @@ export async function generateStaticParams() {
   }));
 }
 
-function addJsonLd(post: BlogPost) {
+function addJsonLdOwnerWebsite(post: BlogPost) {
   return {
     __html: JSON.stringify({
       "@context": "https://schema.org",
@@ -124,6 +125,15 @@ function addJsonLd(post: BlogPost) {
   };
 }
 
+function addJsonLdFAQPost(post: BlogPost) {
+  console.log('schemaJsonLD ne', post?.schemaJsonLD);
+
+  return {
+    __html: JSON.stringify(post.schemaJsonLD)
+  };
+}
+
+
 
 export default async function BlogPostPage({ params }: BlogPostPageProps) {
   const { slug } = await params
@@ -141,8 +151,15 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
       {/* JSON-LD Structured Data */}
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={addJsonLd(post)}
+        dangerouslySetInnerHTML={addJsonLdOwnerWebsite(post)}
       />
+
+      {
+        post.schemaJsonLD && <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={addJsonLdFAQPost(post)}
+        />
+      }
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Breadcrumb */}

@@ -14,6 +14,7 @@ export interface BlogPost {
   author: string;
   readingTime: string;
   image?: string;
+  schemaJsonLD?: string;
 }
 
 export async function getBlogPosts(): Promise<BlogPost[]> {
@@ -58,6 +59,7 @@ export async function getBlogPost(slug: string): Promise<BlogPost | null> {
       author: data.author,
       readingTime: data.readingTime,
       image: data.image,
+      schemaJsonLD: data.schemaJsonLD
     };
   } catch (error) {
     console.error(`Error reading blog post ${slug}:`, error);
