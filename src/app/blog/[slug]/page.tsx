@@ -89,41 +89,7 @@ export async function generateStaticParams() {
   }));
 }
 
-function addJsonLdOwnerWebsite(post: BlogPost) {
-  return {
-    __html: JSON.stringify({
-      "@context": "https://schema.org",
-      "@type": "BlogPosting",
-      "headline": post.title,
-      "description": post.description,
-      "datePublished": post.date,
-      "dateModified": post.date,
-      "author": {
-        "@type": "Person",
-        "name": post.author,
-        "url": "https://www.steve-bang.com/about" // Add author URL if available
-      },
-      "publisher": {
-        "@type": "Organization",
-        "name": "Steve Bang",
-        "logo": {
-          "@type": "ImageObject",
-          "url": "https://www.steve-bang.com/logo.png" // Add your logo URL
-        }
-      },
-      "image": {
-        "@type": "ImageObject",
-        "url": post.image || '/default-og-image.jpg',
-        "width": 1200,
-        "height": 630
-      },
-      "mainEntityOfPage": {
-        "@type": "WebPage",
-        "@id": `https://www.steve-bang.com/blog/${post.slug}`
-      }
-    })
-  };
-}
+
 
 function addJsonLdFAQPost(post: BlogPost) {
   console.log('schemaJsonLD ne', post?.schemaJsonLD);
@@ -133,6 +99,68 @@ function addJsonLdFAQPost(post: BlogPost) {
   };
 }
 
+/** BlogPosting — core article schema */
+function buildBlogPostingSchema(post: BlogPost) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    "headline": post.title,
+    "description": post.description,
+    "datePublished": post.date,
+    "dateModified": post.date,
+    "keywords": post.tags.join(', '),
+    "author": {
+      "@type": "Person",
+      "name": post.author,
+      "url": "https://www.steve-bang.com/about"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "Steve Bang",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://www.steve-bang.com/logo.png"
+      }
+    },
+    "image": {
+      "@type": "ImageObject",
+      "url": post.image || '/default-og-image.jpg',
+      "width": 1200,
+      "height": 630
+    },
+    "mainEntityOfPage": {
+      "@type": "WebPage",
+      "@id": `https://www.steve-bang.com/blog/${post.slug}`
+    }
+  };
+}
+
+function buildBreadcrumbSchema(post: BlogPost) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      {
+        "@type": "ListItem",
+        "position": 1,
+        "name": "Home",
+        "item": "https://www.steve-bang.com"
+      },
+      {
+        "@type": "ListItem",
+        "position": 2,
+        "name": "Blog",
+        "item": "https://www.steve-bang.com/blog"
+      },
+      {
+        "@type": "ListItem",
+        "position": 3,
+        "name": post.title,
+        "item": `https://www.steve-bang.com/blog/${post.slug}`
+      }
+    ]
+  };
+}
 
 
 export default async function BlogPostPage({ params }: BlogPostPageProps) {
@@ -148,10 +176,11 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
 
   return (
     <section className="pt-28 pb-20">
-      {/* JSON-LD Structured Data */}
+
+      {/* BlogPosting schema */}
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={addJsonLdOwnerWebsite(post)}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(buildBlogPostingSchema(post)) }}
       />
 
       {
@@ -160,6 +189,13 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
           dangerouslySetInnerHTML={addJsonLdFAQPost(post)}
         />
       }
+
+
+      {/* 2. BreadcrumbList schema */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(buildBreadcrumbSchema(post)) }}
+      />
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Breadcrumb */}
