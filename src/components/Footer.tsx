@@ -13,7 +13,7 @@ export default function Footer() {
       transition-colors duration-300
     ">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-8">
 
           {/* Brand column */}
           <div className="col-span-1 md:col-span-2">
@@ -58,7 +58,6 @@ export default function Footer() {
                 { href: '/blog', label: 'Blog' },
                 { href: '/projects', label: 'Projects' },
                 { href: '/about', label: 'About' },
-                { href: '/privacy-policy', label: 'Privacy Policy' },
               ].map(({ href, label }) => (
                 <li key={href}>
                   <Link
@@ -83,7 +82,30 @@ export default function Footer() {
                 { href: '/blog/category/architecture', label: 'Architecture' },
                 { href: '/blog/category/devops', label: 'DevOps' },
                 { href: '/blog/category/web-development', label: 'Web Development' },
-                
+
+              ].map(({ href, label }) => (
+                <li key={href}>
+                  <Link
+                    href={href}
+                    className="text-gray-600 dark:text-gray-400 hover:text-primary dark:hover:text-purple-400 transition-colors text-sm"
+                  >
+                    {label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Legal */}
+          <div>
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-900 dark:text-gray-100 mb-4">
+              Legal
+            </h3>
+            <ul className="space-y-2">
+              {[
+                { href: '/privacy-policy', label: 'Privacy Policy' },
+                { href: '/terms-and-conditions', label: 'Terms & Conditions' },
+                { href: '/contact', label: 'Contact' },
               ].map(({ href, label }) => (
                 <li key={href}>
                   <Link

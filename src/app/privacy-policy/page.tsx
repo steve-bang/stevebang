@@ -405,7 +405,7 @@ const sections: Section[] = [
 
 export default function PrivacyPolicyPage() {
   return (
-    <div className="pt-32 pb-20 min-h-screen bg-white text-slate-700 dark:bg-slate-950 dark:text-slate-300">
+    <div className="pt-8 pb-20 min-h-screen bg-white text-slate-700 dark:bg-slate-950 dark:text-slate-300">
       {/* Hero */}
       <div className="border-b border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900/50">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16">
