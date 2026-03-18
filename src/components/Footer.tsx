@@ -58,6 +58,7 @@ export default function Footer() {
                 { href: '/blog', label: 'Blog' },
                 { href: '/projects', label: 'Projects' },
                 { href: '/about', label: 'About' },
+                { href: '/privacy-policy', label: 'Privacy Policy' },
               ].map(({ href, label }) => (
                 <li key={href}>
                   <Link
@@ -82,6 +83,7 @@ export default function Footer() {
                 { href: '/blog/category/architecture', label: 'Architecture' },
                 { href: '/blog/category/devops', label: 'DevOps' },
                 { href: '/blog/category/web-development', label: 'Web Development' },
+                
               ].map(({ href, label }) => (
                 <li key={href}>
                   <Link
