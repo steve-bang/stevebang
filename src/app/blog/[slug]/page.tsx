@@ -203,7 +203,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
         </nav>
 
         {/* Tags above title */}
-        {post.tags.length > 0 && (
+        {/* {post.tags.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-5">
             {post.tags.slice(0, 3).map((tag) => (
               <Link
@@ -216,21 +216,16 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
               </Link>
             ))}
           </div>
-        )}
+        )} */}
 
         {/* Article Header */}
         <header className="mb-10">
-          <h1
-            className="text-4xl sm:text-5xl font-bold mb-5 leading-tight tracking-tight text-gray-900 dark:text-gray-50"
-            style={{ fontFamily: "'Lora', Georgia, serif" }}
-          >
-            {post.title}
-          </h1>
+
 
           {/* Description / lead */}
-          <p className="text-lg text-gray-500 dark:text-gray-400 leading-relaxed mb-6">
+          {/* <p className="text-lg text-gray-500 dark:text-gray-400 leading-relaxed mb-6">
             {post.description}
-          </p>
+          </p> */}
 
           {/* Meta row */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-gray-500 dark:text-gray-400 border-t border-b border-gray-100 dark:border-gray-800 py-4">
@@ -257,6 +252,14 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
               </>
             )}
           </div>
+
+          <h1
+            className="text-4xl sm:text-5xl font-bold mb-5 leading-tight tracking-tight text-gray-900 dark:text-gray-50"
+            style={{ fontFamily: "'Lora', Georgia, serif" }}
+          >
+            {post.title}
+          </h1>
+
         </header>
 
         {/* Featured Image */}
