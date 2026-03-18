@@ -1,209 +1,258 @@
+"use client";
+
 import { BlogPost } from "@/app/blog/[slug]/page";
-import { getBlogPostsBySearch } from "@/lib/mdx";
-import { IPost } from "@/types/Post";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react";
 import { FaTimes } from "react-icons/fa";
+import { FiSearch } from "react-icons/fi";
 
 type Props = {
-    open: boolean,
-    onClose: () => void,
-}
+  open: boolean;
+  onClose: () => void;
+};
 
-export default function SearchModal(
-    { open, onClose }: Props
-) {
+export default function SearchModal({ open, onClose }: Props) {
+  const [query, setQuery] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [results, setResults] = useState<BlogPost[]>([]);
+  const modalRef = useRef<HTMLDivElement>(null);
 
-    const [query, setQuery] = useState("");
-    const inputRef = useRef<HTMLInputElement>(null);
-    const [isLoading, setIsLoading] = useState<boolean>(false)
-    const [results, setResults] = useState<BlogPost[]>([])
-    const modalRef = useRef<HTMLDivElement>(null)
+  // Focus input when opened
+  useEffect(() => {
+    if (open) inputRef.current?.focus();
+  }, [open]);
 
-    useEffect(() => {
-        if (open) {
-            inputRef.current?.focus()
+  // Keyboard handling + scroll lock
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+
+      if (e.key === "Tab" && modalRef.current) {
+        const focusable = modalRef.current.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+
+        if (!e.shiftKey && document.activeElement === last) {
+          first.focus();
+          e.preventDefault();
         }
-    }, [open])
-
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') {
-                onClose()
-            }
-
-            // Trap tab key within modal
-            if (e.key === 'Tab' && modalRef.current) {
-                const focusableElements = modalRef.current.querySelectorAll(
-                    'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-                )
-
-                const firstElement = focusableElements[0] as HTMLElement
-                const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement
-
-                if (!e.shiftKey && document.activeElement === lastElement) {
-                    firstElement.focus()
-                    e.preventDefault()
-                }
-
-                if (e.shiftKey && document.activeElement === firstElement) {
-                    lastElement.focus()
-                    e.preventDefault()
-                }
-            }
+        if (e.shiftKey && document.activeElement === first) {
+          last.focus();
+          e.preventDefault();
         }
+      }
+    };
 
-        if (open) {
-            document.addEventListener('keydown', handleKeyDown)
-            document.body.style.overflow = 'hidden'
-            inputRef.current?.focus()
-        }
-
-        return () => {
-            document.removeEventListener('keydown', handleKeyDown)
-            document.body.style.overflow = ''
-        }
-    }, [open, onClose])
-
-    useEffect(() => {
-        if (!query || query.trim() == '') {
-            setResults([])
-            setIsLoading(false)
-            return
-        }
-
-        setIsLoading(true)
-        const delayDebounce = setTimeout(async () => {
-            try {
-
-                const res = await fetch(`api/posts?keywords=${query}`);
-
-                const json = await res.json();
-                setResults(json)
-            }
-            finally {
-                setIsLoading(false)
-            }
-        }, 500)
-
-        return () => clearTimeout(delayDebounce)
-    }, [query])
-
-    function onCloseModal() {
-        setQuery("");
-        setResults([])
-        setIsLoading(false)
-        onClose()
+    if (open) {
+      document.addEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = "hidden";
+      inputRef.current?.focus();
     }
 
-    const handleBackdropClick = (e: React.MouseEvent) => {
-        if (e.target === e.currentTarget) {
-            onClose()
-        }
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = "";
+    };
+  }, [open, onClose]);
+
+  // Debounced search
+  useEffect(() => {
+    if (!query.trim()) {
+      setResults([]);
+      setIsLoading(false);
+      return;
     }
 
-    if (!open) return null;
+    setIsLoading(true);
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`api/posts?keywords=${query}`);
+        const json = await res.json();
+        setResults(json);
+      } finally {
+        setIsLoading(false);
+      }
+    }, 500);
 
-    return (
-        <div className="fixed inset-0 z-50" ref={modalRef} role="dialog" aria-modal="true" onClick={handleBackdropClick}>
-            <div
-                className="fixed inset-0 bg-gray-900 opacity-70 h-screen"
-                onClick={onClose}
-            />
+    return () => clearTimeout(timer);
+  }, [query]);
 
-            <div className="relative h-screen flex items-center justify-center p-4">
-                <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col fade-in">
+  function onCloseModal() {
+    setQuery("");
+    setResults([]);
+    setIsLoading(false);
+    onClose();
+  }
 
-                    <div className="p-4 border-b border-gray-200">
-                        <div className="relative">
-                            <input
-                                ref={inputRef}
-                                id="searchInput"
-                                type="text"
-                                onChange={(e) => setQuery(e.target.value)}
-                                value={query}
-                                placeholder="Search keywords..."
-                                className="w-full p-4 pr-10 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                                autoFocus
-                            />
-                            <i className="fas fa-search absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
-                            <button id="closeSearch" className="cursor-pointer absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600" onClick={onCloseModal}>
-                                <FaTimes />
-                            </button>
-                        </div>
-                    </div>
+  const handleBackdropClick = (e: React.MouseEvent) => {
+    if (e.target === e.currentTarget) onClose();
+  };
 
-                    {/* Search Results */}
-                    <div id="searchResults" className="flex-1 overflow-y-auto custom-scrollbar p-4">
-                        {
-                            isLoading ? (
-                                <div id="loadingResults" className="flex flex-col items-center justify-center py-12">
-                                    <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500 mb-4"></div>
-                                    <p className="text-gray-600">Searching for posts...</p>
-                                </div>
-                            ) : results.length === 0 && query ? (
-                                <div id="emptyResults" className="flex flex-col items-center justify-center py-12">
-                                    <i className="fas fa-search text-4xl text-gray-300 mb-4"></i>
-                                    <h3 className="text-xl font-medium text-gray-700 mb-2">No results found</h3>
-                                    <p className="text-gray-500 text-center max-w-md">Try different keywords or check back later for new posts.</p>
-                                </div>
-                            ) : (
-                                <div id="resultsContainer" className="space-y-4">
-                                    <div className="space-y-4">
-                                        {results.map((post, index) => (
-                                            <BlogCard
-                                                key={post.slug}
-                                                post={post}
-                                                className="animate-slide-up"
-                                                style={{ animationDelay: `${index * 0.05}s` }}
-                                                onCloseModal={onCloseModal}
-                                            />
-                                        ))}
-                                    </div>
-                                </div>
-                            )
-                        }
+  if (!open) return null;
 
+  return (
+    <div
+      className="fixed inset-0 z-50"
+      ref={modalRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Search"
+      onClick={handleBackdropClick}
+    >
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 bg-gray-950/70 dark:bg-black/80 backdrop-blur-sm"
+        onClick={onClose}
+      />
 
-                    </div>
+      {/* Panel */}
+      <div className="relative h-screen flex items-start justify-center pt-24 px-4">
+        <div className="
+          bg-white dark:bg-gray-900
+          border border-gray-200 dark:border-gray-700/60
+          rounded-2xl shadow-2xl dark:shadow-black/60
+          w-full max-w-2xl max-h-[70vh]
+          flex flex-col
+          animate-in fade-in slide-in-from-top-4 duration-200
+        ">
 
-                    {/* Search Footer */}
-                    <div className="p-4 border-t border-gray-200 text-sm text-gray-500 flex justify-between items-center">
-                        <span>{results.length} {results.length === 1 ? 'result' : 'results'}</span>
-                        <div>
-                            <span className="mr-2">Press <kbd className="px-2 py-1 bg-gray-100 rounded">Esc</kbd> to close</span>
-                        </div>
-                    </div>
-                </div>
+          {/* Search input */}
+          <div className="p-4 border-b border-gray-100 dark:border-gray-800">
+            <div className="relative flex items-center">
+              <FiSearch className="absolute left-3.5 w-4 h-4 text-gray-400 dark:text-gray-500 pointer-events-none" />
+              <input
+                ref={inputRef}
+                id="searchInput"
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search keywords..."
+                className="
+                  w-full
+                  pl-10 pr-10 py-3
+                  bg-gray-50 dark:bg-gray-800
+                  border border-gray-200 dark:border-gray-700
+                  text-gray-900 dark:text-gray-100
+                  placeholder:text-gray-400 dark:placeholder:text-gray-500
+                  rounded-lg text-sm
+                  focus:outline-none focus:ring-2 focus:ring-primary/50 dark:focus:ring-purple-500/50
+                  focus:border-primary dark:focus:border-purple-500
+                  transition-colors
+                "
+                autoFocus
+              />
+              <button
+                onClick={onCloseModal}
+                aria-label="Close search"
+                className="
+                  absolute right-3
+                  text-gray-400 dark:text-gray-500
+                  hover:text-gray-700 dark:hover:text-gray-300
+                  transition-colors cursor-pointer
+                "
+              >
+                <FaTimes className="w-3.5 h-3.5" />
+              </button>
             </div>
-        </div>)
+          </div>
+
+          {/* Results body */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {isLoading ? (
+              <div className="flex flex-col items-center justify-center py-14">
+                <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-primary dark:border-purple-500 mb-4" />
+                <p className="text-gray-500 dark:text-gray-400 text-sm">Searching…</p>
+              </div>
+            ) : results.length === 0 && query.trim() ? (
+              <div className="flex flex-col items-center justify-center py-14 text-center">
+                <FiSearch className="w-10 h-10 text-gray-300 dark:text-gray-600 mb-4" />
+                <h3 className="text-base font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                  No results found
+                </h3>
+                <p className="text-sm text-gray-400 dark:text-gray-500 max-w-xs">
+                  Try different keywords or check back later for new posts.
+                </p>
+              </div>
+            ) : (
+              results.map((post, index) => (
+                <BlogCard
+                  key={post.slug}
+                  post={post}
+                  style={{ animationDelay: `${index * 0.05}s` }}
+                  onCloseModal={onCloseModal}
+                />
+              ))
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="
+            px-4 py-3
+            border-t border-gray-100 dark:border-gray-800
+            flex justify-between items-center
+            text-xs text-gray-400 dark:text-gray-500
+          ">
+            <span>
+              {query.trim()
+                ? `${results.length} ${results.length === 1 ? "result" : "results"}`
+                : "Type to search"}
+            </span>
+            <span>
+              Press{" "}
+              <kbd className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 font-mono text-xs">
+                Esc
+              </kbd>{" "}
+              to close
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
+/* ── Result card ─────────────────────────────────────────── */
 
 interface BlogCardProps {
-    post: BlogPost
-    className?: string
-    style?: React.CSSProperties
-    onCloseModal: () => void
+  post: BlogPost;
+  className?: string;
+  style?: React.CSSProperties;
+  onCloseModal: () => void;
 }
 
-export function BlogCard({ post, className = '', style, onCloseModal }: BlogCardProps) {
-    return (
-        <div
-            className={`bg-white p-4 rounded-lg border border-gray-200 hover:border-indigo-300 transition ${className}`}
-            style={style}
-        >
-            <div className="flex justify-between items-start mb-2">
-            </div>
-            <h3 className="text-lg font-semibold text-gray-800 mb-2">{post.title}</h3>
-            <p className="text-gray-600 text-sm mb-3 line-clamp-5">{post.description}</p>
-            <Link
-                href={`/blog/${post.slug}`}
-                className="text-indigo-600 text-sm font-medium hover:text-indigo-700 transition"
-                onClick={onCloseModal}
-            >
-                Read post →
-            </Link>
-        </div>
-    )
+export function BlogCard({ post, className = "", style, onCloseModal }: BlogCardProps) {
+  return (
+    <div
+      className={`
+        group
+        bg-white dark:bg-gray-800/60
+        border border-gray-200 dark:border-gray-700/50
+        hover:border-primary dark:hover:border-purple-500
+        hover:shadow-sm dark:hover:shadow-gray-900/40
+        rounded-xl p-4
+        transition-all duration-150
+        ${className}
+      `}
+      style={style}
+    >
+      <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-1 group-hover:text-primary dark:group-hover:text-purple-400 transition-colors line-clamp-2">
+        {post.title}
+      </h3>
+      <p className="text-gray-500 dark:text-gray-400 text-xs mb-3 line-clamp-2">
+        {post.description}
+      </p>
+      <Link
+        href={`/blog/${post.slug}`}
+        className="text-xs font-semibold text-primary dark:text-purple-400 hover:underline underline-offset-2 transition-colors"
+        onClick={onCloseModal}
+      >
+        Read post →
+      </Link>
+    </div>
+  );
 }

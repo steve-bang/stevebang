@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { format } from 'date-fns';
 import Image from 'next/image';
+
 interface BlogCardProps {
   post: {
     slug: string;
@@ -16,28 +17,73 @@ interface BlogCardProps {
 
 export default function BlogCard({ post }: BlogCardProps) {
   return (
-    <article className="bg-white rounded-lg shadow-sm overflow-hidden hover:transform hover:-translate-y-1 transition-all duration-200 cursor-pointer">
-      <Link href={`/blog/${post.slug}`} className="hover:text-primary transition-colors">
+    <article className="
+      group
+      bg-white dark:bg-gray-800/60
+      border border-transparent dark:border-gray-700/50
+      rounded-xl
+      shadow-sm dark:shadow-gray-900/40
+      overflow-hidden
+      hover:-translate-y-1
+      transition-all duration-200
+      cursor-pointer
+    ">
+      <Link href={`/blog/${post.slug}`} className="block hover:text-primary transition-colors">
+
+        {/* Cover image */}
         {post.image && (
-          <Image
-            src={post.image}
-            alt={post.title}
-            className="w-full h-48 object-cover"
-            width={400}
-            height={192}
-          />
+          <div className="overflow-hidden">
+            <Image
+              src={post.image}
+              alt={post.title}
+              className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300"
+              width={400}
+              height={192}
+            />
+          </div>
         )}
+
         <div className="p-6">
-          <h2 className="text-xl font-semibold mb-2 line-clamp-3" title={post.title}>
+
+          {/* Tags row */}
+          {post.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {post.tags.slice(0, 2).map((tag) => (
+                <span
+                  key={tag}
+                  className="text-xs font-medium px-2 py-0.5 rounded-full bg-primary/10 dark:bg-purple-500/15 text-primary dark:text-purple-400"
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Title */}
+          <h2
+            className="text-xl font-semibold mb-2 line-clamp-3 text-gray-900 dark:text-gray-100 group-hover:text-primary dark:group-hover:text-purple-400 transition-colors"
+            title={post.title}
+          >
             {post.title}
           </h2>
-          <p className="text-gray-600 text-sm mb-4 line-clamp-5" title={post.description}>
+
+          {/* Description */}
+          <p
+            className="text-gray-600 dark:text-gray-400 text-sm mb-4 line-clamp-4"
+            title={post.description}
+          >
             {post.description}
           </p>
-          <div className="flex items-center justify-between text-sm text-gray-500">
-            {/* <span>{post.author}</span> */}
-            <span className="text-purple-600 hover:underline text-sm">Read more →</span>
-            <time dateTime={post.date}>
+
+          {/* Footer row */}
+          <div className="flex items-center justify-between text-sm pt-4 border-t border-gray-100 dark:border-gray-700/60">
+            <span className="text-purple-600 dark:text-purple-400 font-medium group-hover:underline">
+              Read more →
+            </span>
+            <time
+              dateTime={post.date}
+              className="text-gray-400 dark:text-gray-500 tabular-nums"
+            >
               {format(new Date(post.date), 'MMM d, yyyy')}
             </time>
           </div>
@@ -46,4 +92,4 @@ export default function BlogCard({ post }: BlogCardProps) {
       </Link>
     </article>
   );
-} 
+}

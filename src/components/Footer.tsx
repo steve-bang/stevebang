@@ -1,76 +1,108 @@
 import Link from 'next/link';
-import { FiGithub, FiTwitter, FiLinkedin } from 'react-icons/fi';
+import { FiGithub, FiLinkedin } from 'react-icons/fi';
 import Logo from '@/components/Logo';
 import Buymeacoffee from './Buymeacoffee';
 
 export default function Footer() {
   return (
-    <footer className="bg-gradient-to-br from-white to-gray-100 py-12">
+    <footer className="
+      bg-gradient-to-br from-white to-gray-100
+      dark:from-gray-950 dark:to-gray-900
+      border-t border-gray-200 dark:border-gray-800
+      py-12
+      transition-colors duration-300
+    ">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+
+          {/* Brand column */}
           <div className="col-span-1 md:col-span-2">
             <Link href="/" className="flex items-center">
               <Logo />
             </Link>
-            <p className="mt-4 text-gray-600 max-w-md">
+            <p className="mt-4 text-gray-600 dark:text-gray-400 max-w-md leading-relaxed">
               Sharing software engineering experiences and insights to help developers grow.
             </p>
             <div className="flex space-x-4 mt-6">
-              <Link href="https://github.com/steve-bang" className="text-gray-600 hover:text-primary transition-colors" target='_blank'>
-                <FiGithub size={24} />
+              <Link
+                href="https://github.com/steve-bang"
+                className="text-gray-500 dark:text-gray-400 hover:text-primary dark:hover:text-purple-400 transition-colors"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="GitHub"
+              >
+                <FiGithub size={22} />
               </Link>
-              {/* <Link href="https://twitter.com/sangdotnet" className="text-gray-600 hover:text-primary transition-colors">
-                <FiTwitter size={24} />
-              </Link> */}
-              <Link href="https://linkedin.com/in/steve-bang-924ab6284" className="text-gray-600 hover:text-primary transition-colors">
-                <FiLinkedin size={24} />
+              <Link
+                href="https://linkedin.com/in/steve-bang-924ab6284"
+                className="text-gray-500 dark:text-gray-400 hover:text-primary dark:hover:text-purple-400 transition-colors"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="LinkedIn"
+              >
+                <FiLinkedin size={22} />
               </Link>
             </div>
 
             <Buymeacoffee />
-
           </div>
+
+          {/* Quick Links */}
           <div>
-            <h3 className="text-lg font-semibold mb-4">Quick Links</h3>
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-900 dark:text-gray-100 mb-4">
+              Quick Links
+            </h3>
             <ul className="space-y-2">
-              <li>
-                <Link href="/" className="text-gray-600 hover:text-primary transition-colors">Home</Link>
-              </li>
-              <li>
-                <Link href="/blog" className="text-gray-600 hover:text-primary transition-colors">Blog</Link>
-              </li>
-              <li>
-                <Link href="/projects" className="text-gray-600 hover:text-primary transition-colors">Projects</Link>
-              </li>
-              <li>
-                <Link href="/about" className="text-gray-600 hover:text-primary transition-colors">About</Link>
-              </li>
+              {[
+                { href: '/', label: 'Home' },
+                { href: '/blog', label: 'Blog' },
+                { href: '/projects', label: 'Projects' },
+                { href: '/about', label: 'About' },
+              ].map(({ href, label }) => (
+                <li key={href}>
+                  <Link
+                    href={href}
+                    className="text-gray-600 dark:text-gray-400 hover:text-primary dark:hover:text-purple-400 transition-colors text-sm"
+                  >
+                    {label}
+                  </Link>
+                </li>
+              ))}
             </ul>
           </div>
+
+          {/* Categories */}
           <div>
-            <h3 className="text-lg font-semibold mb-4">Categories</h3>
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-900 dark:text-gray-100 mb-4">
+              Categories
+            </h3>
             <ul className="space-y-2">
-              <li>
-                <Link href="/blog/category/dotnet" className="text-gray-600 hover:text-primary transition-colors">.NET Development</Link>
-              </li>
-              <li>
-                <Link href="/blog/category/architecture" className="text-gray-600 hover:text-primary transition-colors">Architecture</Link>
-              </li>
-              <li>
-                <Link href="/blog/category/devops" className="text-gray-600 hover:text-primary transition-colors">DevOps</Link>
-              </li>
-              <li>
-                <Link href="/blog/category/web-development" className="text-gray-600 hover:text-primary transition-colors">Web Development</Link>
-              </li>
+              {[
+                { href: '/blog/category/dotnet', label: '.NET Development' },
+                { href: '/blog/category/architecture', label: 'Architecture' },
+                { href: '/blog/category/devops', label: 'DevOps' },
+                { href: '/blog/category/web-development', label: 'Web Development' },
+              ].map(({ href, label }) => (
+                <li key={href}>
+                  <Link
+                    href={href}
+                    className="text-gray-600 dark:text-gray-400 hover:text-primary dark:hover:text-purple-400 transition-colors text-sm"
+                  >
+                    {label}
+                  </Link>
+                </li>
+              ))}
             </ul>
           </div>
         </div>
-        <div className="border-t border-gray-200 mt-4 pt-4">
-          <p className="text-center text-gray-600">
+
+        {/* Bottom bar */}
+        <div className="border-t border-gray-200 dark:border-gray-800 mt-10 pt-6">
+          <p className="text-center text-sm text-gray-500 dark:text-gray-500">
             © {new Date().getFullYear()} Steve Bang. All rights reserved.
           </p>
         </div>
       </div>
     </footer>
   );
-} 
+}

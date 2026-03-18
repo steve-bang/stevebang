@@ -52,7 +52,7 @@ export default function RootLayout({
       </head>
       <body className={inter.className}>
         <Navbar />
-        <main className="min-h-screen bg-gray-50">
+        <main className="min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors duration-300">
           {children}
         </main>
         <Footer />

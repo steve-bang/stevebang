@@ -21,9 +21,7 @@ export const metadata: Metadata = {
   },
 };
 
-
 export default async function BlogPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
-
   const { page } = await searchParams;
 
   const posts = await getBlogPosts();
@@ -33,7 +31,6 @@ export default async function BlogPage({ searchParams }: { searchParams: Promise
   const startIndex = (pageNumber - 1) * maxItemsPerPage;
   const paginatedPosts = posts.slice(startIndex, startIndex + maxItemsPerPage);
 
-  // Generate structured data for the blog listing
   const structuredData = {
     '@context': 'https://schema.org',
     '@type': 'Steve Bang',
@@ -46,13 +43,10 @@ export default async function BlogPage({ searchParams }: { searchParams: Promise
       description: post.description,
       datePublished: post.date,
       dateModified: post.date,
-      author: {
-        '@type': 'Person',
-        name: post.author
-      },
+      author: { '@type': 'Person', name: post.author },
       image: post.image,
-      keywords: post.tags.join(', ')
-    }))
+      keywords: post.tags.join(', '),
+    })),
   };
 
   return (
@@ -62,15 +56,21 @@ export default async function BlogPage({ searchParams }: { searchParams: Promise
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
       />
-      <div className="pt-32 pb-20">
+
+      <div className="pt-32 pb-20 min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors duration-300">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+
+          {/* Page header */}
           <div className="text-center mb-16">
-            <h1 className="text-4xl font-bold mb-4">Blog</h1>
-            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+            <h1 className="text-4xl font-bold mb-4 text-gray-900 dark:text-gray-50">
+              Blog
+            </h1>
+            <p className="text-xl text-gray-600 dark:text-gray-400 max-w-3xl mx-auto">
               Explore insights, tutorials, and best practices in .NET development, software architecture, and more.
             </p>
           </div>
 
+          {/* Cards grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {paginatedPosts.map((post) => (
               <BlogCard key={post.slug} post={post} />
@@ -82,4 +82,4 @@ export default async function BlogPage({ searchParams }: { searchParams: Promise
       </div>
     </>
   );
-} 
+}

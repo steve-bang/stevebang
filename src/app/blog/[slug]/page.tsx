@@ -3,7 +3,7 @@ import { getBlogPost, getBlogPosts } from '@/lib/mdx';
 import { format } from 'date-fns';
 import { MDXRemote } from 'next-mdx-remote/rsc';
 import Link from 'next/link';
-import { FiArrowLeft } from 'react-icons/fi';
+import { FiArrowLeft, FiClock } from 'react-icons/fi';
 import Image from 'next/image';
 import remarkGfm from 'remark-gfm';
 import GoogleAdsBanner from '@/components/GoogleAdsBanner';
@@ -89,17 +89,12 @@ export async function generateStaticParams() {
   }));
 }
 
-
-
 function addJsonLdFAQPost(post: BlogPost) {
-  console.log('schemaJsonLD ne', post?.schemaJsonLD);
-
   return {
     __html: JSON.stringify(post.schemaJsonLD)
   };
 }
 
-/** BlogPosting — core article schema */
 function buildBlogPostingSchema(post: BlogPost) {
   return {
     "@context": "https://schema.org",
@@ -172,8 +167,6 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
     notFound();
   }
 
-  //const headings = await extractHeadings(post.content);
-
   return (
     <section className="pt-28 pb-20">
 
@@ -183,58 +176,99 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(buildBlogPostingSchema(post)) }}
       />
 
-      {
-        post.schemaJsonLD && <script
+      {post.schemaJsonLD && (
+        <script
           type="application/ld+json"
           dangerouslySetInnerHTML={addJsonLdFAQPost(post)}
         />
-      }
+      )}
 
-
-      {/* 2. BreadcrumbList schema */}
+      {/* BreadcrumbList schema */}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(buildBreadcrumbSchema(post)) }}
       />
 
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+
         {/* Breadcrumb */}
-        <nav className="mb-8" aria-label="Breadcrumb">
+        <nav className="mb-10" aria-label="Breadcrumb">
           <Link
             href="/blog"
-            className="inline-flex items-center text-gray-600 hover:text-primary transition-colors"
+            className="inline-flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 transition-colors font-medium"
           >
-            <FiArrowLeft className="mr-2" />
+            <FiArrowLeft className="w-4 h-4" />
             Back to blogs
           </Link>
         </nav>
 
+        {/* Tags above title */}
+        {post.tags.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-5">
+            {post.tags.slice(0, 3).map((tag) => (
+              <Link
+                key={tag}
+                href={`/tags/${tag}`}
+                className="tag-pill"
+                rel="tag"
+              >
+                #{tag}
+              </Link>
+            ))}
+          </div>
+        )}
+
         {/* Article Header */}
-        <header className="mb-12">
-          <h1 className="text-4xl font-bold mb-4">{post.title}</h1>
-          <div className="flex items-center space-x-2 text-gray-600">
-            <FaUserAlt />
-            <span itemProp="author">
-              {post.author}
+        <header className="mb-10">
+          <h1
+            className="text-4xl sm:text-5xl font-bold mb-5 leading-tight tracking-tight text-gray-900 dark:text-gray-50"
+            style={{ fontFamily: "'Lora', Georgia, serif" }}
+          >
+            {post.title}
+          </h1>
+
+          {/* Description / lead */}
+          <p className="text-lg text-gray-500 dark:text-gray-400 leading-relaxed mb-6">
+            {post.description}
+          </p>
+
+          {/* Meta row */}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-gray-500 dark:text-gray-400 border-t border-b border-gray-100 dark:border-gray-800 py-4">
+            <span className="inline-flex items-center gap-1.5">
+              <FaUserAlt className="w-3 h-3 text-purple-500 dark:text-purple-400" />
+              <span itemProp="author" className="font-medium text-gray-700 dark:text-gray-300">
+                {post.author}
+              </span>
             </span>
-            <FaGlobeAmericas />
-            <time dateTime={post.date} itemProp="datePublished">
-              {format(new Date(post.date), 'MMMM d, yyyy')}
-            </time>
-            {/* <span>•</span>
-            <span itemProp="timeRequired">{post.readingTime}</span> */}
+            <span className="text-gray-300 dark:text-gray-600" aria-hidden>·</span>
+            <span className="inline-flex items-center gap-1.5">
+              <FaGlobeAmericas className="w-3 h-3 text-purple-500 dark:text-purple-400" />
+              <time dateTime={post.date} itemProp="datePublished">
+                {format(new Date(post.date), 'MMMM d, yyyy')}
+              </time>
+            </span>
+            {post.readingTime && (
+              <>
+                <span className="text-gray-300 dark:text-gray-600" aria-hidden>·</span>
+                <span className="inline-flex items-center gap-1.5">
+                  <FiClock className="w-3 h-3 text-purple-500 dark:text-purple-400" />
+                  <span itemProp="timeRequired">{post.readingTime}</span>
+                </span>
+              </>
+            )}
           </div>
         </header>
 
         {/* Featured Image */}
         {post.image && (
-          <div className="mb-12" itemProp="image" itemScope itemType="https://schema.org/ImageObject">
+          <div className="mb-12 -mx-4 sm:mx-0" itemProp="image" itemScope itemType="https://schema.org/ImageObject">
             <Image
               src={post.image}
               alt={post.title}
               width={1200}
               height={630}
-              className="w-full max-h-[300px] sm:max-h-[400px] object-cover rounded-lg"
+              className="w-full max-h-[320px] sm:max-h-[420px] object-cover sm:rounded-xl shadow-md dark:shadow-black/40"
+              priority
             />
             <meta itemProp="width" content="1200" />
             <meta itemProp="height" content="630" />
@@ -243,7 +277,8 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
 
         {/* Article Content */}
         <article className="markdown-content" itemProp="articleBody">
-          <MDXRemote source={post.content}
+          <MDXRemote
+            source={post.content}
             options={{
               mdxOptions: {
                 remarkPlugins: [remarkGfm],
@@ -254,18 +289,22 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
         </article>
 
         {/* Article Footer */}
-        <footer className="mt-16 pt-8 border-t border-gray-200">
-          <div className="flex flex-wrap gap-2">
-            {post.tags.map((tag) => (
-              <Link
-                key={tag}
-                href={`/tags/${tag}`}
-                className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-sm hover:bg-purple-600 hover:text-white transition-colors"
-                rel="tag"
-              >
-                #{tag}
-              </Link>
-            ))}
+        <footer className="mt-16 pt-8 border-t border-gray-200 dark:border-gray-800">
+          {/* All tags */}
+          <div className="mb-8">
+            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3">Tags</p>
+            <div className="flex flex-wrap gap-2">
+              {post.tags.map((tag) => (
+                <Link
+                  key={tag}
+                  href={`/tags/${tag}`}
+                  className="tag-pill"
+                  rel="tag"
+                >
+                  #{tag}
+                </Link>
+              ))}
+            </div>
           </div>
 
           <GoogleAdsBanner
@@ -275,8 +314,8 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
             fullWidthResponsive={true}
           />
         </footer>
-      </div>
 
+      </div>
     </section>
   );
 }
