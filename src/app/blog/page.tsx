@@ -72,7 +72,9 @@ export default async function BlogPage({ searchParams }: { searchParams: Promise
 
           {/* Cards grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {paginatedPosts.map((post) => (
+            {paginatedPosts
+            .filter(post => post.slug !== '.DS_Store')
+            .map((post) => (
               <BlogCard key={post.slug} post={post} />
             ))}
           </div>

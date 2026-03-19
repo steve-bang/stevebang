@@ -89,11 +89,24 @@ export async function generateStaticParams() {
   }));
 }
 
+// Helper function to safely parse and add FAQ schema JSON-LD
 function addJsonLdFAQPost(post: BlogPost) {
-  return {
-    __html: JSON.stringify(post.schemaJsonLD)
-  };
+  try {
+
+    if (!post.schemaJsonLD) {
+      return { __html: "" };
+    }
+
+    const parsed = JSON.parse(post.schemaJsonLD);
+    return {
+      __html: JSON.stringify(parsed),
+    };
+  } catch (error) {
+    console.error("Invalid schemaJsonLD:", error);
+    return { __html: "" };
+  }
 }
+
 
 function buildBlogPostingSchema(post: BlogPost) {
   return {
@@ -201,22 +214,6 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
             Back to blogs
           </Link>
         </nav>
-
-        {/* Tags above title */}
-        {/* {post.tags.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-5">
-            {post.tags.slice(0, 3).map((tag) => (
-              <Link
-                key={tag}
-                href={`/tags/${tag}`}
-                className="tag-pill"
-                rel="tag"
-              >
-                #{tag}
-              </Link>
-            ))}
-          </div>
-        )} */}
 
         {/* Article Header */}
         <header className="mb-10">

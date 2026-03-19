@@ -222,6 +222,9 @@ Before writing, complete these steps and show your output:
    * Format: [Source Name] — [URL] — [Why relevant]
    * These will be embedded as external links naturally inside the article
 
+
+4. Search all my blog at https://www.steve-bang.com/blog
+
 ---
 
 # OUTPUT FORMAT
@@ -294,9 +297,10 @@ Use H3 subheadings where needed
 At the end of the article, include a “Related Resources” section with 3–5 internal links to other blog posts on steve-bang.com.
 Format:
 
-[Blog Post Title → URL]
+[Blog Post Title](URL) [Replace Short Description]
 
 Only use internal links to help readers explore related topics
+Required search all blogs at https://www.steve-bang.com/blog
 
 ---
 
@@ -307,8 +311,7 @@ Only use internal links to help readers explore related topics
 * Keyword density: 1–2%
 * Bold key terms on first use
 * Short paragraphs: 2–4 lines max
-* Internal link placeholders (minimum 2):
-  [Internal Link: "anchor text" → related topic on steve-bang.com]
+* Internal link if needed 
 * External links (4–6) from research phase, embedded naturally in sentences
 * All code blocks labeled with language: `csharp / `bash / etc.
 
@@ -390,7 +393,6 @@ Before finishing, confirm every item:
 ========== EXAMPLE USE CASE ==============
 ==========================================
 
-
 # ROLE & CONTEXT
 
 You are writing for steve-bang.com, a personal tech blog by Steve Bang.
@@ -403,7 +405,7 @@ Your goal is to write a fully SEO-optimized blog post that ranks on Google Page 
 # TASK
 
 Write a complete, publication-ready SEO blog post about:
-TOPIC: Dependency Injection in .NET: The Complete Guide for 2026
+TOPIC: Redis Caching Patterns in .NET: A Practical Production Guide
 
 ---
 
@@ -429,6 +431,8 @@ Before writing, complete these steps and show your output:
    * Format: [Source Name] — [URL] — [Why relevant]
    * These will be embedded as external links naturally inside the article
 
+4. Search all my blog at https://www.steve-bang.com/blog
+
 ---
 
 # OUTPUT FORMAT
@@ -438,7 +442,7 @@ Start the file with this exact frontmatter block, then the article content below
 Do NOT add any explanation or text outside the Markdown file.
 
 ---
-
+slug: "slug-blog"
 title: "[SEO Title — 50–60 chars, primary keyword near front]"
 date: "[Today's date in YYYY-MM-DD format]"
 description: "[Meta description — 150–160 chars, includes keyword + soft CTA]"
@@ -446,6 +450,18 @@ author: 'Steve Bang'
 tags: ['array keyword include primary keyword and secondary keywords']
 readingTime: "[x min read — estimate based on ~200 words per minute]"
 coverImage: "[https://images.unsplash.com/[relevant-search-term]?auto=format&fit=crop&w=1200&q=80](https://images.unsplash.com/[relevant-search-term]?auto=format&fit=crop&w=1200&q=80)"
+schemaJsonLD: |
+ {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "[Q1]",
+      "acceptedAnswer": { "@type": "Answer", "text": "[A1]" }
+    }
+  ]
+ }
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 [Full article content starts here]
@@ -501,9 +517,10 @@ Use H3 subheadings where needed
 At the end of the article, include a “Related Resources” section with 3–5 internal links to other blog posts on steve-bang.com.
 Format:
 
-[Blog Post Title → URL]
+[Blog Post Title](URL) [Replace Short Description]
 
 Only use internal links to help readers explore related topics
+Required search all blogs at https://www.steve-bang.com/blog
 
 ---
 
@@ -514,8 +531,7 @@ Only use internal links to help readers explore related topics
 * Keyword density: 1–2%
 * Bold key terms on first use
 * Short paragraphs: 2–4 lines max
-* Internal link placeholders (minimum 2):
-  [Internal Link: "anchor text" → related topic on steve-bang.com]
+* Internal link if needed 
 * External links (4–6) from research phase, embedded naturally in sentences
 * All code blocks labeled with language: `csharp / `bash / etc.
 
@@ -529,44 +545,7 @@ Format:
 **Q: [Question]**
 A: [Answer in 40–60 words]
 
----
 
-# SCHEMA MARKUP
-
-After the article body, append two JSON-LD blocks inside markdown code fences:
-
-1. BlogPosting schema:
-
-```json
-{
-  "@context": "https://schema.org",
-  "@type": "BlogPosting",
-  "headline": "[title]",
-  "description": "[description]",
-  "author": { "@type": "Person", "name": "Steve Bang", 
-               "url": "https://steve-bang.com" },
-  "publisher": { "@type": "Organization", "name": "steve-bang.com" },
-  "datePublished": "[date]",
-  "keywords": ["[tag1]", "[tag2]", "[tag3]"],
-  "url": "https://steve-bang.com/blog/[slug]"
-}
-```
-
-2. FAQPage schema:
-
-```json
-{
-  "@context": "https://schema.org",
-  "@type": "FAQPage",
-  "mainEntity": [
-    {
-      "@type": "Question",
-      "name": "[Q1]",
-      "acceptedAnswer": { "@type": "Answer", "text": "[A1]" }
-    }
-  ]
-}
-```
 
 ---
 
