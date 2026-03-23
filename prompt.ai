@@ -405,7 +405,7 @@ Your goal is to write a fully SEO-optimized blog post that ranks on Google Page 
 # TASK
 
 Write a complete, publication-ready SEO blog post about:
-TOPIC: Redis Caching Patterns in .NET: A Practical Production Guide
+TOPIC: Docker Multi-Stage Builds for .NET: Smaller & Faster Images
 
 ---
 
@@ -532,7 +532,7 @@ Required search all blogs at https://www.steve-bang.com/blog
 * Keyword density: 1–2%
 * Bold key terms on first use
 * Short paragraphs: 2–4 lines max
-* Internal link if needed 
+* Internal link if needed, and in body blog.
 * External links (4–6) from research phase, embedded naturally in sentences
 * All code blocks labeled with language: `csharp / `bash / etc.
 
