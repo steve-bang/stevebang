@@ -11,7 +11,7 @@ export default async function TagsPage() {
 
   // Build tag → post count map
   const tagCountMap = posts
-    .flatMap((post) => post.tags)
+    .flatMap((post) => post.keywords)
     .reduce<Record<string, number>>((acc, tag) => {
       acc[tag] = (acc[tag] ?? 0) + 1;
       return acc;

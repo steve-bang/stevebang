@@ -1,11 +1,13 @@
-export interface IPost {
+export interface BlogPost {
   slug: string;
   title: string;
-  date: string;
   description: string;
   content: string;
-  tags: string[];
+  keywords: string[];
   author: string;
   readingTime: string;
   image?: string;
+  schemaJsonLD?: string;
+  publishedAt: string;
+  updatedAt?: string;
 }

@@ -7,10 +7,10 @@ interface BlogCardProps {
     slug: string;
     title: string;
     description: string;
-    date: string;
+    publishedAt: string;
     author: string;
     image?: string;
-    tags: string[];
+    keywords: string[];
     readingTime: string;
   };
 }
@@ -46,9 +46,9 @@ export default function BlogCard({ post }: BlogCardProps) {
         <div className="p-6">
 
           {/* Tags row */}
-          {post.tags.length > 0 && (
+          {post.keywords.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mb-3">
-              {post.tags.slice(0, 2).map((tag) => (
+              {post.keywords.slice(0, 2).map((tag) => (
                 <span
                   key={tag}
                   className="text-xs font-medium px-2 py-0.5 rounded-full bg-primary/10 dark:bg-purple-500/15 text-primary dark:text-purple-400"
@@ -81,10 +81,10 @@ export default function BlogCard({ post }: BlogCardProps) {
               Read more →
             </span>
             <time
-              dateTime={post.date}
+              dateTime={post.publishedAt}
               className="text-gray-400 dark:text-gray-500 tabular-nums"
             >
-              {format(new Date(post.date), 'MMM d, yyyy')}
+              {format(new Date(post.publishedAt), 'MMM d, yyyy')}
             </time>
           </div>
 

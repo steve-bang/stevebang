@@ -1,21 +1,10 @@
 import fs from 'fs';
 import path from 'path';
 import matter from 'gray-matter';
+import { BlogPost } from '@/types';
 
 const rootDirectory = path.join(process.cwd(), 'content');
 
-export interface BlogPost {
-  slug: string;
-  title: string;
-  date: string;
-  description: string;
-  content: string;
-  tags: string[];
-  author: string;
-  readingTime: string;
-  image?: string;
-  schemaJsonLD?: string;
-}
 
 export async function getBlogPosts(): Promise<BlogPost[]> {
   const files = fs.readdirSync(path.join(rootDirectory, 'blog'));
@@ -29,20 +18,30 @@ export async function getBlogPosts(): Promise<BlogPost[]> {
       return {
         slug: filename.replace('.mdx', ''),
         title: data.title,
-        date: data.date,
+        publishedAt: data.publishedAt,
         description: data.description,
         content,
-        tags: data.tags || [],
+        keywords: data.keywords || [],
         author: data.author,
         readingTime: data.readingTime,
         image: data.image,
+        updatedAt: data.updatedAt,
       };
     })
   );
 
-  return posts.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  return posts.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
 }
 
+// Get only posts that have been published (publishedAt in the past)
+export async function getAllBlogPostsPublished(): Promise<BlogPost[]> {
+  const posts = await getBlogPosts();
+
+  return posts
+    .filter(post => new Date(post.publishedAt) <= new Date());
+}
+
+// Get a specific blog post by its slug
 export async function getBlogPost(slug: string): Promise<BlogPost | null> {
   try {
     const filePath = path.join(rootDirectory, 'blog', `${slug}.mdx`);
@@ -52,10 +51,11 @@ export async function getBlogPost(slug: string): Promise<BlogPost | null> {
     return {
       slug,
       title: data.title,
-      date: data.date,
+      publishedAt: data.publishedAt,
+      updatedAt: data.updatedAt,
       description: data.description,
       content,
-      tags: data.tags || [],
+      keywords: data.keywords || [],
       author: data.author,
       readingTime: data.readingTime,
       image: data.image,
@@ -69,7 +69,7 @@ export async function getBlogPost(slug: string): Promise<BlogPost | null> {
 
 export async function getBlogPostsByTag(tag: string): Promise<BlogPost[]> {
   const posts = await getBlogPosts();
-  return posts.filter(post => post.tags.includes(tag));
+  return posts.filter(post => post.keywords.includes(tag));
 }
 
 export async function getBlogPostsByAuthor(author: string): Promise<BlogPost[]> {

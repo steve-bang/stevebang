@@ -15,7 +15,7 @@ interface TagPageProps {
 export default async function TagPage({ params }: TagPageProps) {
   const { slug } = await params;
   const posts = await getBlogPosts();
-  const filteredPosts = posts.filter(post => post.tags.includes(slug));
+  const filteredPosts = posts.filter(post => post.keywords.includes(slug));
 
   return (
     <div className="container mx-auto pt-32 pb-20">
@@ -32,7 +32,7 @@ export default async function TagPage({ params }: TagPageProps) {
             <div className="p-4">
               <h2 className="text-xl font-semibold mb-2">{post.title}</h2>
               <p className="text-gray-600 mb-2">{post.description}</p>
-              <p className="text-sm text-gray-500">By {post.author} on {format(new Date(post.date), 'MMMM d, yyyy')}</p>
+              <p className="text-sm text-gray-500">By {post.author} on {format(new Date(post.publishedAt), 'MMMM d, yyyy')}</p>
               <Link href={`/blog/${post.slug}`} className="text-purple-600 hover:underline">Read more</Link>
             </div>
           </div>

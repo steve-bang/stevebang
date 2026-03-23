@@ -40,10 +40,10 @@ The file must follow this structure EXACTLY:
 
 ---
 title: "[SEO Title — 50–60 chars, primary keyword near front]"
-date: "[Today's date in YYYY-MM-DD format]"
+publishedAt: "[Today's date in YYYY-MM-DD format]"
 description: "[Meta description — 150–160 chars, includes keyword + soft CTA]"
 author: 'Steve Bang'
-tags: ["primary keyword", "secondary keyword 1", "secondary keyword 2", 
+keywords: ["primary keyword", "secondary keyword 1", "secondary keyword 2", 
        "secondary keyword 3", "secondary keyword 4"]
 readingTime: "[x min read — estimate based on ~200 words per minute]"
 coverImage: "https://images.unsplash.com/[relevant-search-term]?auto=format&fit=crop&w=1200&q=80"
@@ -236,10 +236,10 @@ Do NOT add any explanation or text outside the Markdown file.
 ---
 
 title: "[SEO Title — 50–60 chars, primary keyword near front]"
-date: "[Today's date in YYYY-MM-DD format]"
+publishedAt: "[Today's date in YYYY-MM-DD format]"
 description: "[Meta description — 150–160 chars, includes keyword + soft CTA]"
 author: 'Steve Bang'
-tags: ['array keyword include primary keyword and secondary keywords']
+keywords: ['array keyword include primary keyword and secondary keywords']
 readingTime: "[x min read — estimate based on ~200 words per minute]"
 coverImage: "[https://images.unsplash.com/[relevant-search-term]?auto=format&fit=crop&w=1200&q=80](https://images.unsplash.com/[relevant-search-term]?auto=format&fit=crop&w=1200&q=80)"
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -444,12 +444,13 @@ Do NOT add any explanation or text outside the Markdown file.
 ---
 slug: "slug-blog"
 title: "[SEO Title — 50–60 chars, primary keyword near front]"
-date: "[Today's date in YYYY-MM-DD format]"
 description: "[Meta description — 150–160 chars, includes keyword + soft CTA]"
 author: 'Steve Bang'
-tags: ['array keyword include primary keyword and secondary keywords']
+keywords: ['array keyword include primary keyword and secondary keywords']
 readingTime: "[x min read — estimate based on ~200 words per minute]"
 coverImage: "[https://images.unsplash.com/[relevant-search-term]?auto=format&fit=crop&w=1200&q=80](https://images.unsplash.com/[relevant-search-term]?auto=format&fit=crop&w=1200&q=80)"
+publishedAt: "[Today's date in YYYY-MM-DD format]"
+updatedAt: "[Today's date in YYYY-MM-DD format]"
 schemaJsonLD: |
  {
   "@context": "https://schema.org",

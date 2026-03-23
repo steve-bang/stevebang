@@ -8,20 +8,8 @@ import Image from 'next/image';
 import remarkGfm from 'remark-gfm';
 import GoogleAdsBanner from '@/components/GoogleAdsBanner';
 import rehypeSlug from 'rehype-slug'
-import { FaGlobeAmericas, FaUserAlt } from 'react-icons/fa';
-
-export interface BlogPost {
-  slug: string;
-  title: string;
-  description: string;
-  date: string;
-  author: string;
-  image?: string;
-  content: string;
-  tags: string[];
-  readingTime: string;
-  schemaJsonLD?: string;
-}
+import { FaGlobeAmericas, FaHome, FaUserAlt } from 'react-icons/fa';
+import { BlogPost } from '@/types';
 
 interface BlogPostPageProps {
   params: Promise<{ slug: string }>
@@ -44,7 +32,7 @@ export async function generateMetadata({ params }: BlogPostPageProps) {
   const metadata = {
     title: `${post.title} - Steve Bang`,
     description: post.description,
-    keywords: post.tags.join(', '),
+    keywords: post.keywords.join(', '),
     authors: [{ name: post.author, url: 'https://www.steve-bang.com/about' }],
     creator: 'Steve Bang',
     alternates: {
@@ -54,10 +42,10 @@ export async function generateMetadata({ params }: BlogPostPageProps) {
       title: post.title,
       description: post.description,
       type: 'article',
-      publishedTime: post.date,
-      modifiedTime: post.date,
+      publishedTime: post.publishedAt,
+      modifiedTime: post.publishedAt,
       authors: [post.author],
-      tags: post.tags,
+      tags: post.keywords,
       url: `https://www.steve-bang.com/blog/${slug}`,
       siteName: 'Steve Bang',
       images: [
@@ -114,9 +102,9 @@ function buildBlogPostingSchema(post: BlogPost) {
     "@type": "BlogPosting",
     "headline": post.title,
     "description": post.description,
-    "datePublished": post.date,
-    "dateModified": post.date,
-    "keywords": post.tags.join(', '),
+    "datePublished": post.publishedAt,
+    "dateModified": post.updatedAt || post.publishedAt,
+    "keywords": post.keywords.join(', '),
     "author": {
       "@type": "Person",
       "name": post.author,
@@ -205,7 +193,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
 
         {/* Breadcrumb */}
-        <nav className="mb-10" aria-label="Breadcrumb">
+        <nav className="mb-3" aria-label="Breadcrumb">
           <Link
             href="/blog"
             className="inline-flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 transition-colors font-medium"
@@ -213,6 +201,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
             <FiArrowLeft className="w-4 h-4" />
             Back to blogs
           </Link>
+          
         </nav>
 
         {/* Article Header */}
@@ -235,8 +224,8 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
             <span className="text-gray-300 dark:text-gray-600" aria-hidden>·</span>
             <span className="inline-flex items-center gap-1.5">
               <FaGlobeAmericas className="w-3 h-3 text-purple-500 dark:text-purple-400" />
-              <time dateTime={post.date} itemProp="datePublished">
-                {format(new Date(post.date), 'MMMM d, yyyy')}
+              <time dateTime={post.publishedAt} itemProp="datePublished">
+                {format(new Date(post.publishedAt), 'MMMM d, yyyy')}
               </time>
             </span>
             {post.readingTime && (
@@ -294,7 +283,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
           <div className="mb-8">
             <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3">Tags</p>
             <div className="flex flex-wrap gap-2">
-              {post.tags.map((tag) => (
+              {post.keywords.map((tag) => (
                 <Link
                   key={tag}
                   href={`/tags/${tag}`}

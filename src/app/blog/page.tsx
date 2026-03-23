@@ -1,4 +1,4 @@
-import { getBlogPosts } from '@/lib/mdx';
+import { getAllBlogPostsPublished } from '@/lib/mdx';
 import Pagination from '@/components/Pagination';
 import BlogCard from '@/components/BlogCard';
 import { Metadata } from 'next';
@@ -24,7 +24,7 @@ export const metadata: Metadata = {
 export default async function BlogPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
   const { page } = await searchParams;
 
-  const posts = await getBlogPosts();
+  const posts = await getAllBlogPostsPublished();
   const pageNumber = page ? Number(page) : 1;
   const maxItemsPerPage = 6;
   const totalPages = Math.ceil(posts.length / maxItemsPerPage);
@@ -41,11 +41,11 @@ export default async function BlogPage({ searchParams }: { searchParams: Promise
       '@type': 'BlogPosting',
       headline: post.title,
       description: post.description,
-      datePublished: post.date,
-      dateModified: post.date,
+      datePublished: post.publishedAt,
+      dateModified: post.publishedAt,
       author: { '@type': 'Person', name: post.author },
       image: post.image,
-      keywords: post.tags.join(', '),
+      keywords: post.keywords.join(', '),
     })),
   };
 
