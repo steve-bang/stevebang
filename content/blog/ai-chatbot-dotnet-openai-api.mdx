@@ -1,0 +1,423 @@
+---
+slug: "ai-chatbot-dotnet-openai-api"
+title: "Build an AI Chatbot with .NET and OpenAI API"
+description: "Learn how to build an AI chatbot with .NET and OpenAI API. Real code, streaming responses, conversation memory, and production tips from real projects."
+author: 'Steve Bang'
+keywords: ['ai chatbot dotnet openai api', 'openai api asp.net core', 'dotnet openai chatbot', 'chatgpt api csharp', 'semantic kernel dotnet', 'openai streaming dotnet']
+readingTime: "11 min read"
+image: "/images/ai-chatbot-dotnet-openai-api.webp"
+publishedAt: "2026-04-20"
+updatedAt: "2026-04-20"
+schemaJsonLD: |
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "How do I connect the OpenAI API to a .NET application?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Install the official Azure.AI.OpenAI or OpenAI NuGet package, create an OpenAIClient with your API key, then call GetChatCompletionsAsync with a list of ChatMessage objects. Store your API key in .NET User Secrets for development and Azure Key Vault or environment variables for production — never hardcode it."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What is the difference between OpenAI SDK and Semantic Kernel for .NET?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The OpenAI SDK gives you direct, low-level access to the OpenAI API — fine for simple chatbots and straightforward completions. Semantic Kernel is Microsoft's higher-level orchestration framework that adds memory, plugins, planners, and multi-model support on top. Use the SDK for simplicity, Semantic Kernel when building more complex AI workflows."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I implement streaming responses from OpenAI in ASP.NET Core?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Use CompleteChatStreamingAsync and write each token chunk to the HTTP response with response.WriteAsync inside a loop. Set Content-Type to text/event-stream and flush after each chunk with FlushAsync(). This streams tokens to the browser as they arrive, exactly like ChatGPT's typing effect."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I maintain conversation history with the OpenAI API in .NET?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The OpenAI API is stateless — you must send the full conversation history on every request as a list of ChatMessage objects (system, user, assistant roles). Store the history server-side in memory, distributed cache, or a database keyed by session ID. Trim old messages to stay within the model's context window limit."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How much does it cost to run an AI chatbot with the OpenAI API?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Costs depend on token usage. GPT-4o-mini is the most cost-effective for chatbots at around $0.15 per million input tokens. A typical chatbot exchange uses 500–2000 tokens. For a low-traffic internal tool, expect a few dollars per month. Log token usage from every response and set a billing alert in your OpenAI dashboard."
+        }
+      }
+    ]
+  }
+---
+
+# Build an AI Chatbot with .NET and OpenAI API
+
+Every .NET developer I know has had the same moment: you open the OpenAI API docs, see a Python example, and think — "this should be straightforward in C# too." Then you spend two hours figuring out why your conversation history isn't persisting and why responses arrive all at once instead of streaming token by token.
+
+I've built several AI-powered features in .NET backends over the past year — a customer support bot, an internal documentation assistant, and a code review helper. Each one taught me something the tutorials don't cover. In this guide, I'll show you how to **build an AI chatbot with .NET and the OpenAI API** from scratch: project setup, conversation memory, streaming responses, and the production mistakes I made so you don't have to.
+
+---
+
+## What You Actually Need to Understand Before Writing Code
+
+Most tutorials jump straight to `dotnet add package` and paste a 10-line example. That works until you try to build something real. Before touching code, there are three concepts worth internalizing.
+
+### The API Is Stateless — You Own the Memory
+
+The OpenAI API has no memory between requests. Every call is completely independent. To maintain a conversation, you must send the **entire conversation history** — every user message and every assistant reply — on every single request.
+
+This is the most common source of confusion I see. Your chatbot "forgetting" what was said two messages ago isn't a bug in your code — it's expected behavior if you're not managing history correctly.
+
+### The Message Role System
+
+Every message in the OpenAI chat format has a **role**:
+
+- `system` — sets the behavior and persona of the assistant (sent once, at the top)
+- `user` — the human's messages
+- `assistant` — the model's previous replies
+
+A properly structured conversation looks like this in C#:
+
+```csharp
+var messages = new List<ChatMessage>
+{
+    new SystemChatMessage("You are a helpful .NET backend assistant."),
+    new UserChatMessage("What is dependency injection?"),
+    new AssistantChatMessage("Dependency injection is a pattern where..."),
+    new UserChatMessage("Can you show me an example?")  // latest message
+};
+```
+
+### Tokens, Context Windows, and Cost
+
+The model processes **tokens**, not words — roughly 1 token per 0.75 English words. Every model has a context window limit (GPT-4o: 128k tokens). If your conversation history exceeds the limit, the API throws an error. If you never trim it, costs grow linearly with conversation length.
+
+I'll cover trimming strategies in the production section below.
+
+---
+
+## Setting Up the Project
+
+### Install Dependencies
+
+Create a new ASP.NET Core Web API project and install the official OpenAI package:
+
+```bash
+dotnet new webapi -n AiChatbot -controllers
+cd AiChatbot
+dotnet add package OpenAI
+```
+
+Microsoft also maintains the [Azure.AI.OpenAI](https://www.nuget.org/packages/Azure.AI.OpenAI) package if you're routing through Azure OpenAI Service — the API surface is nearly identical, which makes switching between direct OpenAI and Azure OpenAI a one-line change.
+
+### Store Your API Key Safely
+
+Never hardcode your OpenAI API key. For local development, use .NET User Secrets:
+
+```bash
+dotnet user-secrets init
+dotnet user-secrets set "OpenAI:ApiKey" "sk-your-key-here"
+```
+
+For production, use environment variables or Azure Key Vault — the same approach I cover in [How to Secure Your Secret Keys and Database Connections in .NET](https://www.steve-bang.com/blog/secure-secrets-dotnet-keyvault-users-secret).
+
+### Register the Client in Program.cs
+
+```csharp
+builder.Services.AddSingleton(sp =>
+{
+    var apiKey = builder.Configuration["OpenAI:ApiKey"]
+        ?? throw new InvalidOperationException("OpenAI API key not configured.");
+    return new OpenAIClient(apiKey);
+});
+
+builder.Services.AddScoped<IChatService, ChatService>();
+```
+
+Using `AddSingleton` for `OpenAIClient` is intentional — it's thread-safe and designed to be reused across requests. Creating a new client per request wastes resources and ignores connection pooling. For a deep dive on choosing the right lifetime, see [Dependency Injection in .NET: The Complete Guide for 2026](https://www.steve-bang.com/blog/dependency-injection-dotnet-2026).
+
+---
+
+## Building the Chat Service
+
+### The Core Service
+
+```csharp
+public interface IChatService
+{
+    Task<string> SendMessageAsync(string sessionId, string userMessage);
+}
+
+public class ChatService : IChatService
+{
+    private readonly OpenAIClient _client;
+    private readonly IConversationStore _store;
+    private const string Model = "gpt-4o-mini";
+
+    public ChatService(OpenAIClient client, IConversationStore store)
+    {
+        _client = client;
+        _store = store;
+    }
+
+    public async Task<string> SendMessageAsync(string sessionId, string userMessage)
+    {
+        var history = await _store.GetHistoryAsync(sessionId);
+        history.Add(new UserChatMessage(userMessage));
+
+        var chatClient = _client.GetChatClient(Model);
+        var options = new ChatCompletionOptions { MaxOutputTokenCount = 1000 };
+
+        var messages = new List<ChatMessage>
+        {
+            new SystemChatMessage("You are a helpful assistant. Be concise and accurate.")
+        };
+        messages.AddRange(history);
+
+        var response = await chatClient.CompleteChatAsync(messages, options);
+        var assistantReply = response.Value.Content[0].Text;
+
+        history.Add(new AssistantChatMessage(assistantReply));
+        await _store.SaveHistoryAsync(sessionId, history);
+
+        return assistantReply;
+    }
+}
+```
+
+### In-Memory Conversation Store
+
+For a simple start, an in-memory store works fine. In production, replace this with Redis or a database — I'll explain why below.
+
+```csharp
+public interface IConversationStore
+{
+    Task<List<ChatMessage>> GetHistoryAsync(string sessionId);
+    Task SaveHistoryAsync(string sessionId, List<ChatMessage> history);
+}
+
+public class InMemoryConversationStore : IConversationStore
+{
+    private readonly ConcurrentDictionary<string, List<ChatMessage>> _sessions = new();
+
+    public Task<List<ChatMessage>> GetHistoryAsync(string sessionId)
+    {
+        var history = _sessions.GetOrAdd(sessionId, _ => new List<ChatMessage>());
+        return Task.FromResult(history);
+    }
+
+    public Task SaveHistoryAsync(string sessionId, List<ChatMessage> history)
+    {
+        _sessions[sessionId] = history;
+        return Task.CompletedTask;
+    }
+}
+```
+
+Register it in `Program.cs`:
+
+```csharp
+builder.Services.AddSingleton<IConversationStore, InMemoryConversationStore>();
+```
+
+### The API Controller
+
+```csharp
+[ApiController]
+[Route("api/[controller]")]
+public class ChatController : ControllerBase
+{
+    private readonly IChatService _chatService;
+
+    public ChatController(IChatService chatService)
+    {
+        _chatService = chatService;
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> Chat([FromBody] ChatRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Message))
+            return BadRequest("Message cannot be empty.");
+
+        var sessionId = request.SessionId ?? Guid.NewGuid().ToString();
+        var reply = await _chatService.SendMessageAsync(sessionId, request.Message);
+
+        return Ok(new { sessionId, reply });
+    }
+}
+
+public record ChatRequest(string Message, string? SessionId);
+```
+
+At this point you have a working chatbot API. Send a POST to `/api/chat` with a message and session ID, and you get a response that remembers conversation context across turns.
+
+---
+
+## Adding Streaming Responses
+
+Waiting 3–5 seconds for a full response feels slow. **Streaming** sends tokens as they're generated — the typing effect you see in ChatGPT. Here's how to implement it in ASP.NET Core:
+
+```csharp
+[HttpGet("stream")]
+public async Task Stream([FromQuery] string message, [FromQuery] string sessionId)
+{
+    Response.ContentType = "text/event-stream";
+    Response.Headers.CacheControl = "no-cache";
+    await Response.Body.FlushAsync();
+
+    var history = await _store.GetHistoryAsync(sessionId);
+    history.Add(new UserChatMessage(message));
+
+    var messages = new List<ChatMessage>
+    {
+        new SystemChatMessage("You are a helpful assistant.")
+    };
+    messages.AddRange(history);
+
+    var chatClient = _client.GetChatClient("gpt-4o-mini");
+    var fullReply = new StringBuilder();
+
+    await foreach (var chunk in chatClient.CompleteChatStreamingAsync(messages))
+    {
+        foreach (var part in chunk.ContentUpdate)
+        {
+            fullReply.Append(part.Text);
+            await Response.WriteAsync($"data: {part.Text}\n\n");
+            await Response.Body.FlushAsync();
+        }
+    }
+
+    // Save complete reply to history only after streaming finishes
+    history.Add(new AssistantChatMessage(fullReply.ToString()));
+    await _store.SaveHistoryAsync(sessionId, history);
+}
+```
+
+The key detail most examples miss: accumulate the full reply in a `StringBuilder` and save to history **only after the stream completes**. Saving mid-stream leaves incomplete assistant messages in history, which confuses the model on the next turn.
+
+The [OpenAI .NET library documentation](https://github.com/openai/openai-dotnet) has comprehensive examples for streaming, tool use, and structured outputs if you want to go further.
+
+---
+
+## Production Best Practices and Mistakes I've Made
+
+### 1. Trim Conversation History to Avoid Token Overflow
+
+This is the mistake that caused my first chatbot to start throwing errors after about 30 messages:
+
+```csharp
+private List<ChatMessage> TrimHistory(List<ChatMessage> history, int maxMessages = 20)
+{
+    if (history.Count > maxMessages)
+        return history.TakeLast(maxMessages).ToList();
+    return history;
+}
+```
+
+A more precise approach is counting tokens before sending. The [SharpToken](https://github.com/dmitry-brazhenko/SharpToken) library ports OpenAI's tokenizer to .NET — use it to calculate token counts and trim until you're safely under the model's context window.
+
+### 2. Don't Use In-Memory Store in Production
+
+`InMemoryConversationStore` loses all conversations on app restart and doesn't scale across multiple instances. In production, use Redis via `IDistributedCache` for short-lived sessions or a database for persistent history — the same patterns covered in [Mastering Caching in .NET](https://www.steve-bang.com/blog/caching-in-dotnet-best-practices).
+
+### 3. Rate Limiting and Retry Logic
+
+The OpenAI API enforces rate limits per minute on both requests and tokens. Without retry logic, a burst of traffic surfaces 429 errors directly to users. Use [Polly](https://github.com/App-vNext/Polly) to add exponential backoff:
+
+```csharp
+var retryPolicy = Policy
+    .Handle<HttpRequestException>(ex => ex.StatusCode == HttpStatusCode.TooManyRequests)
+    .WaitAndRetryAsync(3, retryAttempt =>
+        TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)));
+```
+
+### 4. Track Costs with Token Counts
+
+Every API response includes usage data. Log it from day one:
+
+```csharp
+var response = await chatClient.CompleteChatAsync(messages);
+var usage = response.Value.Usage;
+
+_logger.LogInformation(
+    "Chat — Input: {Input} tokens, Output: {Output} tokens, Total: {Total}",
+    usage.InputTokenCount,
+    usage.OutputTokenCount,
+    usage.TotalTokenCount);
+```
+
+I log this to Application Insights with a cost alert at $10/month. It's caught runaway conversations from automated test scripts more than once.
+
+### 5. Handle CancellationToken for Streaming
+
+When a user closes their browser mid-stream, the connection drops but your server keeps calling the OpenAI API and writing to a dead response stream. Pass `HttpContext.RequestAborted` to your streaming call to cancel gracefully — this is exactly the pattern covered in [CancellationToken in .NET: Best Practices to Prevent Wasted Work](https://www.steve-bang.com/blog/cancellationtoken-preventing-wasted-work-dotnet-backend):
+
+```csharp
+await foreach (var chunk in chatClient.CompleteChatStreamingAsync(
+    messages, cancellationToken: HttpContext.RequestAborted))
+{
+    // ...
+}
+```
+
+The [Microsoft AI safety guidance for Azure OpenAI](https://learn.microsoft.com/en-us/azure/ai-services/openai/concepts/safety-system-message-templates) also has solid system prompt templates for reducing harmful outputs in user-facing chatbots.
+
+---
+
+## Key Takeaways
+
+- **The OpenAI API is stateless** — you must send the full conversation history on every request. Own your memory layer from day one; don't assume the API handles it.
+- **Use `gpt-4o-mini` for chatbots** unless you specifically need GPT-4o's reasoning. The quality-to-cost ratio is excellent for most conversational use cases.
+- **Register `OpenAIClient` as Singleton** — it's thread-safe and designed for reuse. Per-request instantiation wastes connections.
+- **Trim conversation history** before it hits the context window limit. `TakeLast(20)` works as a simple guard; token counting with SharpToken is more precise.
+- **Streaming is worth the extra complexity** — response feel is dramatically better, and the implementation is only ~15 lines more than non-streaming.
+- **Never use in-memory store in production** — use Redis or a database keyed by a client-generated session ID.
+- **Log token usage from day one** — unexpected API costs almost always come from untrimmed conversation histories or automated test traffic.
+- **Pass `HttpContext.RequestAborted` to streaming calls** — cancel in-flight API requests when users disconnect instead of burning tokens on a dead connection.
+
+---
+
+## Conclusion
+
+Building an AI chatbot with .NET and the OpenAI API is genuinely approachable — the hard part isn't the API calls, it's the decisions around memory, streaming, and production reliability that tutorials skip over. The patterns in this post are what I wish I'd had when I started: a service-based architecture that makes conversation state explicit, streaming that actually works end-to-end, and a production checklist built from real mistakes.
+
+Start simple — a single endpoint with in-memory history — and layer in Redis persistence and streaming once the basics are solid. The architecture scales naturally from there into tool calling, RAG pipelines, and multi-model setups if you need them.
+
+If you build something interesting with this or hit edge cases — especially around prompt injection or structured outputs — drop a comment below. And if you want to go deeper on .NET backend patterns and AI integration, there's plenty more on [steve-bang.com](https://www.steve-bang.com).
+
+---
+
+## FAQ
+
+**Q: How do I connect the OpenAI API to a .NET application?**
+A: Install the `OpenAI` NuGet package, create an `OpenAIClient` with your API key, then call `CompleteChatAsync` with a list of `ChatMessage` objects. Store your API key in .NET User Secrets for development and Azure Key Vault for production — never hardcode it in source code or config files committed to version control.
+
+**Q: What is the difference between OpenAI SDK and Semantic Kernel for .NET?**
+A: The OpenAI SDK gives direct, low-level API access — ideal for simple chatbots and straightforward completions. Semantic Kernel is Microsoft's higher-level orchestration framework adding memory, plugins, and multi-model support. Use the SDK when starting out; reach for Semantic Kernel when building more complex AI workflows with tool calling or RAG pipelines.
+
+**Q: How do I implement streaming responses from OpenAI in ASP.NET Core?**
+A: Use `CompleteChatStreamingAsync`, set `Content-Type: text/event-stream`, and call `FlushAsync()` after writing each token chunk to the response. Accumulate the full reply in a `StringBuilder` and save it to conversation history only after the stream completes — otherwise history entries will contain incomplete assistant messages.
+
+**Q: How do I maintain conversation history with the OpenAI API in .NET?**
+A: The API is stateless — send the full conversation history as a `List<ChatMessage>` on every request. Store history server-side in memory for development, Redis for production sessions, or a database for persistent history, keyed by a session ID generated on the first message and stored client-side.
+
+**Q: How much does it cost to run an AI chatbot with the OpenAI API?**
+A: GPT-4o-mini costs ~$0.15 per million input tokens. A typical exchange uses 500–2,000 tokens. For a low-traffic internal tool, expect a few dollars per month. Log `InputTokenCount` and `OutputTokenCount` from every response, and set a billing alert in your OpenAI dashboard — runaway costs almost always come from untrimmed conversation histories.
+
+---
+
+## Related Resources
+
+- [How to Secure Your Secret Keys and Database Connections in .NET](https://www.steve-bang.com/blog/secure-secrets-dotnet-keyvault-users-secret) — Keep your OpenAI API key out of source code with User Secrets and Azure Key Vault.
+- [Mastering Caching in .NET: Blazing Fast, Scalable Applications](https://www.steve-bang.com/blog/caching-in-dotnet-best-practices) — Use `IDistributedCache` with Redis to persist conversation history across app restarts and multiple instances.
+- [Dependency Injection in .NET: The Complete Guide for 2026](https://www.steve-bang.com/blog/dependency-injection-dotnet-2026) — Register `OpenAIClient`, `IChatService`, and `IConversationStore` with the right lifetimes.
+- [CancellationToken in .NET: Best Practices to Prevent Wasted Work](https://www.steve-bang.com/blog/cancellationtoken-preventing-wasted-work-dotnet-backend) — Cancel in-flight OpenAI streaming requests gracefully when users disconnect mid-response.
+- [CI/CD Pipeline for ASP.NET Core with GitHub Actions](https://www.steve-bang.com/blog/cicd-pipeline-aspnet-core-github-actions-2026) — Deploy your AI chatbot API automatically with secrets managed safely through GitHub Environments.
