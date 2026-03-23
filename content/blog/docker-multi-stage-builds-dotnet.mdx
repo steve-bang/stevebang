@@ -57,8 +57,6 @@ schemaJsonLD: |
   }
 ---
 
-# Docker Multi-Stage Builds for .NET: Smaller & Faster Images
-
 Picture this: you push a new .NET API to production and your Docker image is 1.2GB. Your CI pipeline takes 8 minutes to build it. Your Kubernetes node runs out of disk space during a rolling deployment. I've been there — and it's a completely avoidable situation.
 
 **Docker multi-stage builds** are the single most impactful optimization I've applied to .NET containerization. In one real project, I cut image size from 1.1GB down to 94MB and CI build time from 7 minutes to under 90 seconds — without changing a single line of application code.
