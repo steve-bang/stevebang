@@ -1,6 +1,6 @@
 "use client";
 
-import { BlogPost } from "@/app/blog/[slug]/page";
+import { BlogPost } from "@/types";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { FaTimes } from "react-icons/fa";
