@@ -1,0 +1,309 @@
+---
+slug: "we-almost-chose-microservices"
+title: "We Almost Chose Microservices — Here's Why I Stopped My Team"
+description: "We were seconds from going all-in on microservices. Here's the real reason I paused my team — and what we built instead that actually shipped."
+author: 'Steve Bang'
+keywords: ['microservices vs monolith', 'when to use microservices', 'modular monolith .NET', 'software architecture decision', 'microservices pitfalls', 'monolith vs microservices 2025']
+readingTime: "10 min read"
+image: "/images/microservices_vs_monolith_cover.webp"
+publishedAt: "2026-03-29"
+updatedAt: "2026-03-29"
+schemaJsonLD: |
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "When should you NOT use microservices?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Avoid microservices if your team is small (under 8–10 engineers), your domain boundaries aren't well understood yet, you don't have mature CI/CD pipelines, or you're still in the MVP/early-product phase. The operational overhead will slow you down more than the architecture helps."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What is a modular monolith and how is it different from a regular monolith?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "A modular monolith is a single deployable unit with clearly separated internal modules — each with its own models, services, and data access — but without the overhead of distributed networking. It gives you clean domain boundaries without the complexity of managing dozens of independent services."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Can you migrate from a modular monolith to microservices later?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes, and that's exactly the point. A well-structured modular monolith makes future extraction much easier. Clear domain boundaries inside the monolith map directly to microservice boundaries when your team and scale genuinely demand it."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What are the biggest hidden costs of microservices?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Beyond infrastructure, the real costs are cognitive: distributed tracing, managing inter-service contracts, eventual consistency in data, network failure handling, and the operational expertise your team needs. These costs compound fast and are often underestimated during the initial architecture decision."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Does Amazon or Netflix prove microservices are always better?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "No. Amazon and Netflix adopted microservices when they had thousands of engineers and massive independent scaling needs. Even Amazon Prime Video publicly migrated parts of their system back to a monolith to reduce cost and complexity. Your team is not Netflix — and that's fine."
+        }
+      }
+    ]
+  }
+---
+
+There was a moment in our architecture review where the entire team was nodding along with the proposal to go full microservices. The slide deck was polished. The domain boundaries looked clean on the whiteboard. Someone had already sketched out a Kubernetes cluster diagram.
+
+I was two seconds from saying "let's do it."
+
+Then I asked one question: *"How many deployable services are we talking about on day one?"*
+
+The answer was fourteen.
+
+That's when I stopped everything. We had a six-person backend team, no dedicated DevOps engineer, and a product deadline in four months. Fourteen independently deployable services would have buried us before we shipped a single feature.
+
+This post is about **microservices vs monolith** — not as an abstract debate, but as a real decision I had to make under pressure, and the reasoning I used to walk my team back from the edge. I'll show you what we built instead, why it worked, and when you actually *should* go with microservices.
+
+---
+
+## The Appeal Was Real — And That's What Made It Dangerous
+
+I get why microservices are tempting. The industry loves them. Conference talks are full of them. Every job posting mentions Kubernetes. When you're planning a new system, it genuinely *feels* more professional to draw a diagram with twelve interconnected boxes instead of one big rectangle.
+
+But that feeling is a trap.
+
+[Netflix](https://www.atlassian.com/microservices/microservices-architecture/microservices-vs-monolith) pioneered the microservices move in 2009 when they were a rapidly scaling streaming platform facing infrastructure that simply couldn't keep up. [AWS's own architectural guidance](https://aws.amazon.com/compare/the-difference-between-monolithic-and-microservices-architecture/) acknowledges that deploying microservice-based applications is significantly more complex — each service becomes an independently deployable package, usually containerized, with its own lifecycle, scaling policy, and failure modes.
+
+Our team was not Netflix. We were building a B2B SaaS product from scratch with six backend engineers and a two-week sprint cycle.
+
+### What "Distributed Complexity" Actually Means in Practice
+
+Here's what most blog posts skip: the operational cost of microservices doesn't start when you have problems. It starts *day one*.
+
+Before you write a single line of business logic, you need:
+
+- A container registry and CI/CD pipeline per service
+- Service discovery and internal routing (API gateway or service mesh)
+- Distributed tracing to debug cross-service failures
+- A strategy for handling network failures and retries between services
+- A plan for data consistency when services own separate databases
+
+[Research across hundreds of engineering teams](https://getdx.com/blog/monolithic-vs-microservices/) consistently shows that teams rushing into microservices without organizational readiness discover that distributed complexity far exceeds their capacity to handle it. The coordination overhead scales with the number of services — and it scales fast.
+
+We had none of that infrastructure in place. Building it would have consumed the first two months of our runway.
+
+---
+
+## The Question That Changed Everything
+
+After I asked how many services we'd have on day one, I followed up with three more:
+
+1. **Do we actually have independent scaling requirements per domain?** (No — our load was roughly uniform across modules.)
+2. **Are these domains stable enough that we're confident in the service boundaries?** (Also no — we were still discovering requirements.)
+3. **Does our team have the DevOps maturity to operate this?** (Definitely no.)
+
+Every microservices success story — Netflix, Atlassian, Amazon — shares one common thread: they decomposed *existing, well-understood* systems under real scaling pressure. They didn't greenfield with microservices on day one.
+
+[Atlassian's own Vertigo project](https://www.atlassian.com/microservices/microservices-architecture/microservices-vs-monolith), which migrated Jira and Confluence to microservices, took two years to complete and was described by a senior engineer as giving him "vertigo." That was a mature team with deep domain knowledge doing a planned migration — not a fresh build.
+
+When your domain boundaries aren't stable, you're not just building services — you're building wrong services that you'll have to re-cut later at great cost.
+
+---
+
+## What We Built Instead: The Modular Monolith
+
+The compromise wasn't "just build a big ball of mud." It was a **modular monolith** — a single deployable unit with well-enforced internal module boundaries.
+
+Here's what that looks like in practice in a .NET solution:
+
+```
+/src
+  /Modules
+    /Orders
+      Orders.Api/         ← HTTP endpoints
+      Orders.Application/ ← Use cases, handlers
+      Orders.Domain/      ← Entities, domain logic
+      Orders.Infrastructure/ ← EF Core, DB queries
+    /Billing
+      Billing.Api/
+      Billing.Application/
+      Billing.Domain/
+      Billing.Infrastructure/
+    /Notifications
+      ...
+  /Shared
+    /Common/              ← Shared kernel, base types
+  /Host
+    Program.cs            ← Single entry point, registers all modules
+```
+
+Each module is its own internal "service" — with its own models, interfaces, and data access — but they all compile and deploy together as one process.
+
+### Enforcing Boundaries Without Distributed Overhead
+
+In .NET, you can enforce module isolation at compile time using project references and internal access modifiers. A module in `Orders` should never directly reference an entity from `Billing`.
+
+Cross-module communication happens through a shared interface or an in-process event bus:
+
+```csharp
+// In Shared/Common
+public interface IOrderCreatedEvent
+{
+    Guid OrderId { get; }
+    Guid CustomerId { get; }
+    decimal TotalAmount { get; }
+}
+
+// In Orders.Application
+public class CreateOrderCommandHandler : IRequestHandler<CreateOrderCommand>
+{
+    private readonly IEventBus _eventBus;
+
+    public async Task Handle(CreateOrderCommand request, CancellationToken cancellationToken)
+    {
+        // ... create order logic
+
+        await _eventBus.PublishAsync(new OrderCreatedEvent
+        {
+            OrderId = order.Id,
+            CustomerId = order.CustomerId,
+            TotalAmount = order.Total
+        }, cancellationToken);
+    }
+}
+```
+
+The `Billing` module subscribes to `IOrderCreatedEvent` without knowing anything about how orders work internally. The interface is the contract.
+
+This pattern directly mirrors how microservices communicate via events — except there's no network involved, no serialization overhead, and no distributed failure mode to handle.
+
+### Shared Database — Handled with Schema Separation
+
+One of the biggest objections to modular monoliths is shared database state. If all modules use the same DB, aren't you just coupling them through data?
+
+The answer is: only if you let them access each other's tables.
+
+We use EF Core with separate `DbContext` classes per module, each scoped to its own schema:
+
+```csharp
+// Orders module context
+public class OrdersDbContext : DbContext
+{
+    public DbSet<Order> Orders { get; set; }
+    public DbSet<OrderItem> OrderItems { get; set; }
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.HasDefaultSchema("orders"); // ← isolated schema
+    }
+}
+
+// Billing module context
+public class BillingDbContext : DbContext
+{
+    public DbSet<Invoice> Invoices { get; set; }
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.HasDefaultSchema("billing");
+    }
+}
+```
+
+No cross-schema direct queries. If `Billing` needs order data, it queries through the shared event or a dedicated read model — not by joining into the `orders` schema directly.
+
+This means if we ever do extract `Billing` into a separate service later, the database split is already implicit in the schema design.
+
+---
+
+## Production Results: Six Months Later
+
+Six months after launch, here's how the modular monolith performed for us:
+
+- **Deployment time**: ~3 minutes for a full build and deploy. One pipeline. One artifact.
+- **Debugging**: A single structured log stream in Application Insights. No distributed tracing setup needed.
+- **Onboarding**: New engineers understood the architecture in their first week. The module structure made it obvious where to look.
+- **ACID transactions across modules**: When creating an order needed to atomically update both billing and inventory state, we wrapped it in a single `TransactionScope`. No saga pattern, no compensating transactions.
+
+The one area where the monolith showed strain: a reporting module that ran expensive aggregation queries was contending for DB connections with the real-time transactional modules. We extracted that module into a separate read service — just that one — after clearly identifying the bottleneck. That's how architecture should evolve: driven by evidence, not anticipation.
+
+---
+
+## When Microservices Actually Make Sense
+
+I'm not anti-microservices. I'm anti-premature-microservices.
+
+There are real scenarios where a distributed architecture is the right call:
+
+**Independent scaling requirements**: If your payment processing service needs to scale to 10x during Black Friday while your user profile service stays flat, that's a legitimate case for independence.
+
+**Team autonomy at scale**: [Conway's Law](https://getdx.com/blog/monolithic-vs-microservices/) is real — architecture follows team structure. If you have 4+ teams working on the same codebase and shipping is a constant source of conflict, splitting along team boundaries with microservices can genuinely help.
+
+**Polyglot requirements**: If one domain genuinely needs Python for ML workloads while the rest is .NET, microservices give you that freedom cleanly.
+
+**Stable, well-understood domains**: If you're a mature product with years of domain knowledge and you're now feeling the scaling pain, extracting services is lower risk because you know where the boundaries are.
+
+[Amazon Prime Video's famous case study](https://www.akamai.com/blog/cloud/monolith-versus-microservices-weigh-the-difference) is instructive in both directions: they proved microservices can scale enormously, but they also publicly moved part of their infrastructure *back* to a monolith when the distributed overhead outweighed the benefits for a specific workload.
+
+Architecture is not religion.
+
+---
+
+## Key Takeaways
+
+- **Microservices vs monolith is an organizational decision as much as a technical one.** Team size, DevOps maturity, and domain stability matter more than the architecture diagram.
+- **Don't greenfield with microservices** unless you have stable domain boundaries, CI/CD infrastructure already in place, and a team with distributed systems experience.
+- **A modular monolith gives you clean domain separation** without operational overhead — and it's a natural stepping stone to microservices if you need them later.
+- **Enforce module boundaries at compile time** in .NET using project references and internal access modifiers, not just coding conventions.
+- **Separate EF Core DbContexts per schema** keeps your data logically isolated even on a shared database.
+- **Extract services reactively, not proactively.** Wait until you have a real, measured scaling bottleneck before splitting a module out.
+- **"Start with a modular monolith, migrate under pressure"** has a much better success rate than starting with microservices and trying to tame the complexity.
+- **The Amazon and Netflix examples don't apply to your 6-person team.** Stop letting hype drive architecture.
+
+---
+
+## Conclusion
+
+The best architecture decision I made on that project wasn't technical — it was stopping a conversation that was heading in the wrong direction.
+
+**Microservices vs monolith** isn't a question about what's more sophisticated. It's a question about what your team can actually operate, what your domain actually requires, and whether you're solving a real problem or an imagined future one.
+
+We shipped on time with a modular monolith. We've since extracted one service — billing reporting — because data told us to, not because a whiteboard diagram suggested it. The rest runs cleanly, deploys in minutes, and our on-call rotation doesn't wake up to cascading service failures.
+
+If you're facing the same decision, I hope this helps you slow down and ask the right questions before you commit.
+
+Got a different experience? I'd genuinely love to hear it — drop a comment below or reach out via [steve-bang.com/contact](https://www.steve-bang.com/contact). And if you're building .NET backends, there's a lot more on this site worth exploring.
+
+---
+
+## FAQ
+
+**Q: When should you NOT use microservices?**
+A: Avoid microservices if your team is small (under 8–10 engineers), your domain boundaries aren't well understood, you lack mature CI/CD pipelines, or you're still in the MVP phase. The operational overhead compounds quickly and will slow you down more than the architecture benefits you.
+
+**Q: What is a modular monolith and how is it different from a regular monolith?**
+A: A modular monolith is a single deployable unit with clearly separated internal modules — each with their own models, services, and data access — but without distributed network overhead. It gives you clean domain boundaries without the complexity of managing dozens of independent services.
+
+**Q: Can you migrate from a modular monolith to microservices later?**
+A: Yes, and that's exactly the point. A well-structured modular monolith makes future extraction much easier because clear domain boundaries inside the monolith map directly to microservice boundaries when your team and scale genuinely demand it.
+
+**Q: What are the biggest hidden costs of microservices?**
+A: Beyond infrastructure, the real costs are cognitive: distributed tracing, managing inter-service contracts, eventual consistency in data, network failure handling, and the operational expertise your team needs. These costs compound fast and are often underestimated during the initial architecture decision.
+
+**Q: Does Amazon or Netflix prove microservices are always better?**
+A: No. Amazon and Netflix adopted microservices when they had thousands of engineers and massive independent scaling needs. Even Amazon Prime Video publicly migrated parts of their system back to a monolith to reduce cost and complexity. Your team is not Netflix — and that's fine.
+
+---
+
+## Related Resources
+
+- [Race Condition: The Silent Bug That Breaks Production Systems](https://www.steve-bang.com/blog/race-condition-silent-bug-breaks-production) — How production bugs emerge from distributed state and concurrency issues that architecture decisions directly affect.
+- [Idempotency Failures: Why Your API Breaks Under Retry](https://www.steve-bang.com/blog/idempotency-failures-api-breaks-under-retry) — Essential reading if you're building distributed services that need to handle retries safely.
+- [CancellationToken in .NET: Best Practices to Prevent Wasted Work](https://www.steve-bang.com/blog/cancellationtoken-preventing-wasted-work-dotnet-backend) — Optimize how your .NET backend handles long-running operations, relevant whether you're running a monolith or microservices.
+- [Dependency Injection in .NET: The Complete Guide for 2026](https://www.steve-bang.com/blog/dependency-injection-dotnet-2026) — DI is the foundation of module isolation in a .NET modular monolith architecture.
+- [Top 15 Mistakes Developers Make When Creating APIs](https://www.steve-bang.com/blog/top-15-mistakes-dotnet-developers-make-when-creating-apis) — Whether monolith or microservices, API design mistakes will haunt you at scale.
