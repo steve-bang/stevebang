@@ -1,0 +1,285 @@
+---
+slug: "before-using-redis-ask-these-5-questions"
+title: "Before Using Redis, Ask These 5 Questions"
+description: "Most teams add Redis without asking the right questions first. Here are 5 critical questions I ask before using Redis in any .NET backend project."
+author: 'Steve Bang'
+keywords: ['when to use Redis', 'Redis caching strategy', 'Redis vs in-memory cache', 'Redis cache invalidation', 'Redis production pitfalls', 'Redis .NET backend']
+readingTime: "10 min read"
+image: "/images/before-using-redis-ask-these-5-questions.webp"
+publishedAt: "2026-04-04"
+updatedAt: "2026-04-04"
+schemaJsonLD: |
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "When should you NOT use Redis?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Avoid Redis when your data changes too frequently to cache effectively, when your team lacks operational experience to manage a distributed cache, when you're running a single-instance app with low traffic, or when your database queries are already fast enough that the caching overhead wouldn't provide a meaningful gain."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What is cache invalidation and why is it hard with Redis?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Cache invalidation is the process of removing or updating stale data in Redis when the source of truth changes. It's hard because you must decide exactly when to invalidate, which keys to remove, and how to prevent serving outdated data — especially across multiple services that share the same cache."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What is a cache stampede and how do you prevent it?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "A cache stampede happens when many requests simultaneously hit a cache miss and all query the database at once, causing a sudden spike in DB load. Prevent it using techniques like probabilistic early expiration, distributed locks, or background refresh before expiry."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Should I use IMemoryCache or Redis for .NET caching?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Use IMemoryCache for single-instance apps or non-critical caching where simplicity matters. Use Redis (via IDistributedCache) when you have multiple app instances, need cache sharing across services, require persistence, or want explicit TTL control at scale."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What Redis eviction policy should I use in production?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "For general caching use allkeys-lru (evict the least recently used key across all keys). If you only want to evict keys that have an explicit TTL set, use volatile-lru. Avoid noeviction in production cache workloads — Redis will return errors instead of evicting when memory is full."
+        }
+      }
+    ]
+  }
+---
+
+Here's something I see happen constantly on .NET teams: someone opens a PR, and buried in the description is a line that says *"added Redis for caching."* No ticket, no design discussion, no questions about whether caching was even the bottleneck. Just Redis — now wired into the architecture permanently.
+
+**When to use Redis** is one of those decisions that teams tend to make reactively rather than deliberately. Redis is fast, it's popular, and everyone's heard it's the go-to caching solution. So it gets added. And then, six months later, you're debugging a production incident caused by stale cache data, or your Redis memory is at 95% and nobody knows why.
+
+I've been on both sides of this — the engineer who added Redis without thinking it through, and the one cleaning up the aftermath. These are the 5 questions I now ask every time before Redis enters a project.
+
+---
+
+## Question 1: Do You Actually Have a Caching Problem?
+
+This sounds obvious, but it's the question most teams skip. They add Redis *in anticipation* of a problem, not because they've measured one.
+
+Before you introduce a distributed cache, profile your actual queries. Tools like Application Insights, MiniProfiler, or even a slow-query log on your database will show you where time is actually being spent.
+
+### What the numbers need to say first
+
+Redis delivers sub-millisecond read latency — often under 1ms. But [according to DragonflyDB's Redis guide](https://www.dragonflydb.io/guides/mastering-redis-cache-from-basic-to-advanced), this only matters if your database queries are taking tens or hundreds of milliseconds in the first place. If your queries run in 5–10ms and you're handling 100 requests/sec, Redis adds operational complexity for almost zero user-visible gain.
+
+The test I apply: look at your P95 and P99 query latency for a full week. If they're consistently under 20ms and your DB CPU is under 50%, your bottleneck isn't where you think it is.
+
+Only once you have a measured, repeatable performance problem — *and* you've confirmed it's read-heavy, not write-heavy — does Redis become the right conversation to start.
+
+---
+
+## Question 2: Is Your Data Actually Cacheable?
+
+Not all data is cache-friendly. This is the question that separates the teams who get real wins from Redis versus the teams who get cache-related bugs in production.
+
+**Cacheable data** has two properties: it's read frequently, and it changes infrequently. User profile data, product catalogs, configuration settings, reference lists — these are great candidates. You read them constantly, and they change maybe a few times a day.
+
+**Poorly cacheable data** is anything that changes on every write, is user-specific and written often, or requires strong consistency guarantees. An example I ran into: caching the result of a complex financial ledger calculation. The data looked stable — but it was actually updated by background jobs every few seconds. Our cache TTL was 60 seconds. The result was stale financial figures shown to users, which cost us significant trust and a painful hotfix.
+
+[AWS's official caching patterns documentation](https://docs.aws.amazon.com/whitepapers/latest/database-caching-strategies-using-redis/caching-patterns.html) makes this point explicitly: cache-aside works well for read-heavy workloads, but write-through caching is necessary for data where consistency between cache and database matters. Understanding *which pattern* your data needs is as important as deciding to cache at all.
+
+### Ask yourself these three sub-questions
+
+1. How often does this data change? (Once a day is great. Every 5 seconds is a red flag.)
+2. What is the impact of serving stale data to users? (Low: go ahead. High: think harder.)
+3. Is this data the same for all users, or per-user? (Shared data caches efficiently; per-user data bloats memory fast.)
+
+If you can't confidently answer all three, you don't have a caching strategy yet — you have a guess.
+
+---
+
+## Question 3: Do You Have a Cache Invalidation Plan?
+
+Phil Karlton's famous quip — that cache invalidation is one of the two hard problems in computer science — isn't a joke. It's a warning.
+
+I've watched experienced teams spend days debugging why users are seeing wrong data, only to trace it back to a cache key that was never invalidated after an update. The code to *write* the cache was there. The code to *expire* it wasn't.
+
+### The three strategies and their tradeoffs
+
+**TTL-based expiration** is the simplest approach. Set a `TimeToLive` on every key and accept that data may be stale for up to that window. In .NET with `IDistributedCache`:
+
+```csharp
+var options = new DistributedCacheEntryOptions
+{
+    AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5)
+};
+await _cache.SetStringAsync(cacheKey, serializedData, options);
+```
+
+This works well when a few minutes of staleness is acceptable. It breaks down when data must always be fresh.
+
+**Explicit invalidation on write** means you delete or update the cache entry every time the underlying data changes:
+
+```csharp
+public async Task UpdateProductAsync(Product product)
+{
+    await _repository.UpdateAsync(product);
+    await _cache.RemoveAsync($"product:{product.Id}");
+}
+```
+
+This is reliable but easy to miss — especially if writes happen in multiple places or through background jobs.
+
+**Tag-based or key-prefix invalidation** is the approach I now prefer for complex domains. You group cache entries under a shared prefix, then invalidate the entire group at once:
+
+```csharp
+// Invalidate all product cache entries
+var keys = await _redis.SearchKeysAsync("products:*");
+foreach (var key in keys)
+    await _cache.RemoveAsync(key);
+```
+
+This is more expensive per invalidation call, but it makes the logic explicit and easy to reason about. In my experience, cache bugs almost always come from implicit invalidation that someone forgot — not from explicit invalidation that's too aggressive.
+
+The key point: [Redis itself doesn't know when your data is stale](https://redis.io/solutions/caching/). It only knows what TTL you told it. The invalidation logic is entirely on you, and it needs to be designed — not improvised.
+
+---
+
+## Question 4: Can Your Team Operate Redis in Production?
+
+Adding Redis to a side project and adding it to a production system handling real users are very different conversations.
+
+In production, Redis is infrastructure. It needs monitoring, memory alerts, a backup and restore plan, a failover strategy, and someone who understands what happens when it goes down. This isn't scary — but it is real operational overhead that needs to be accounted for.
+
+### The questions your ops plan needs to answer
+
+**What happens if Redis is unavailable?** If your app throws a 500 every time Redis is down, you've introduced a new single point of failure. Your cache reads should always have a fallback to the database:
+
+```csharp
+public async Task<Product?> GetProductAsync(int id)
+{
+    var cached = await _cache.GetStringAsync($"product:{id}");
+    if (cached != null)
+        return JsonSerializer.Deserialize<Product>(cached);
+
+    var product = await _repository.GetByIdAsync(id);
+    if (product != null)
+    {
+        await _cache.SetStringAsync(
+            $"product:{id}",
+            JsonSerializer.Serialize(product),
+            new DistributedCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10)
+            });
+    }
+    return product;
+}
+```
+
+**What is your eviction policy?** Redis stores everything in memory. When it fills up, it needs to evict something. [The default policy in Redis is `noeviction`](https://redis.io/solutions/caching/) — meaning it returns errors rather than evicting keys. In production, you almost always want `allkeys-lru` (evict least recently used) or `volatile-lru` (evict only keys with TTLs). Set this explicitly in your Redis config before you go live.
+
+**Are you running a single instance or a cluster?** A single Redis instance is a single point of failure. If your SLA requires high availability, you need Redis Sentinel (for automatic failover) or Redis Cluster (for horizontal scaling). The [DragonflyDB guide on Redis architecture](https://www.dragonflydb.io/guides/complete-guide-to-redis-architecture-use-cases-and-more) covers these models well — but the point is you need to choose *before* you deploy to production, not after your first outage.
+
+**Are you monitoring hit ratio?** Cache hit ratio is the single most important Redis performance metric. A hit ratio below 70–80% often means your TTLs are too short, your key design is off, or you're caching the wrong data. Instrument it from day one.
+
+---
+
+## Question 5: Are You Solving for Now, or for a Future That May Never Come?
+
+This is the hardest question — because it's really a question about engineering discipline.
+
+Redis is often added preemptively: "We'll need it when we scale." Maybe. But scale is not a date on the calendar. I've seen teams spend two sprints wiring in Redis, Kubernetes, and distributed tracing before they had 100 active users. The operational overhead consumed their capacity to build features. They scaled their infrastructure before they scaled their product.
+
+The [cache-aside pattern described in the Redis documentation](https://redis.io/tutorials/howtos/solutions/microservices/caching/) is straightforward to implement — but it also introduces a three-component system (app, cache, database) where you previously had two (app, database). Every added component is a potential failure mode, a new thing to monitor, and a new thing to explain to every engineer who joins the team.
+
+### What I do instead
+
+I start with `IMemoryCache` — .NET's built-in in-process cache — for any new project that needs caching. It requires zero infrastructure, no additional service, and zero network round trips. It's not distributed, which means it doesn't share state between app instances — but most apps start with a single instance anyway.
+
+```csharp
+// Simple, zero-infrastructure caching for early-stage projects
+public async Task<List<Product>> GetProductsAsync()
+{
+    if (_memoryCache.TryGetValue("products:all", out List<Product>? products))
+        return products!;
+
+    products = await _repository.GetAllAsync();
+    _memoryCache.Set("products:all", products, TimeSpan.FromMinutes(10));
+    return products;
+}
+```
+
+When the app grows to multiple instances, I migrate to Redis using `IDistributedCache` — the same interface, different backing store, minimal code change. The migration takes an afternoon because the caching logic was already abstracted.
+
+The pattern: measure first, cache conservatively, and let real load tell you when Redis is the right next step.
+
+---
+
+## Production Gotchas I've Personally Hit
+
+Even after answering all 5 questions correctly, production has surprises. A few I want to name explicitly:
+
+**Cache stampedes under load.** When a popular cache key expires, dozens of simultaneous requests can miss and all hit the database at once — causing a sudden load spike. The fix is a distributed lock or probabilistic early expiration. [This is well-covered in the distributed cache design literature](https://dev.to/sgchris/designing-a-distributed-cache-redis-and-memcached-at-scale-1if3), but most teams don't think about it until it happens in production.
+
+**Serialization surprises.** `System.Text.Json` will silently drop properties it doesn't recognize on deserialization. If you cache an object and later add a property, cached objects will deserialize with a null. Version your cache keys or add migration logic before deploying schema changes.
+
+**Memory bloat from per-user caching.** Caching data per user (`user:{userId}:dashboard`) sounds smart until you have 50,000 users and each entry is 10KB. That's 500MB of Redis memory for a single feature. Always estimate memory footprint before you cache per-user data at scale.
+
+**Hot keys in a Redis cluster.** If one key gets hit far more than others (e.g., a homepage banner that every visitor fetches), it creates a "hot key" problem — one Redis node bears disproportionate load. The solution is key-level replication or local in-memory caching as an L1 layer in front of Redis.
+
+---
+
+## Key Takeaways
+
+- **Measure before you cache.** P95/P99 query latency and DB CPU are your signal. Don't add Redis because it feels like the right thing to do.
+- **Not all data is cacheable.** Frequently changing, per-user, or strongly consistent data is often a poor fit for a cache-aside pattern.
+- **Cache invalidation must be designed, not improvised.** Decide your strategy — TTL, explicit delete, or key-prefix — and document it as an architectural decision.
+- **Redis needs an operations plan.** Fallback logic, eviction policy, memory monitoring, and high-availability setup are not optional in production.
+- **Start with `IMemoryCache` and migrate to Redis under real load.** The `IDistributedCache` abstraction makes this migration low-risk if you do it early.
+- **Cache stampedes and hot keys are real.** Instrument hit ratio and set up distributed locking before you see 10x traffic, not after.
+- **The best engineers I've worked with add Redis reluctantly.** Not because it's bad — but because they know it adds complexity that has to be earned by evidence.
+
+---
+
+## Conclusion
+
+Redis is genuinely one of the best tools in the backend engineering toolkit. Sub-millisecond reads, flexible data structures, pub/sub, distributed locks — it's remarkable how much it can do. But none of that matters if you add it to solve a problem you don't have yet, or without a plan for how to operate it.
+
+**When to use Redis** isn't a question with a universal answer. It depends on your traffic patterns, your data's change rate, your team's operational capacity, and whether you've measured the problem you're trying to solve.
+
+Ask the five questions before you open that PR. Your future on-call self will thank you.
+
+If this post changed how you think about caching decisions, I'd love to hear your experience — drop a comment below or find me on [steve-bang.com](https://www.steve-bang.com). There's a lot more on backend architecture, .NET performance, and lessons from real production systems here if you want to keep reading.
+
+---
+
+## FAQ
+
+**Q: When should you NOT use Redis?**
+A: Avoid Redis when your data changes too frequently, when you're running a single-instance low-traffic app, or when your team doesn't have the ops capacity to monitor and maintain a distributed cache. Complexity should always be justified by a measured problem — not anticipated scaling.
+
+**Q: What is cache invalidation and why is it hard with Redis?**
+A: Cache invalidation is removing or updating stale Redis entries when source data changes. It's hard because Redis doesn't know when your database changes — you have to tell it. Missing a single invalidation path means users see stale data, and those bugs are notoriously difficult to reproduce.
+
+**Q: What is a cache stampede and how do you prevent it?**
+A: A cache stampede is when a popular key expires and many simultaneous requests all miss the cache and hit the database at once. Prevent it with a distributed lock on cache population, probabilistic early expiration, or an L1 in-memory cache layer that absorbs the first miss burst.
+
+**Q: Should I use IMemoryCache or Redis for .NET caching?**
+A: Use `IMemoryCache` for single-instance apps or early-stage projects — it's zero-infrastructure and fast. Use Redis (via `IDistributedCache`) when you have multiple app instances, need shared cache state, or require explicit TTL and memory management at scale.
+
+**Q: What Redis eviction policy should I use in production?**
+A: Use `allkeys-lru` for general caching — it evicts the least recently used key from all keys when memory is full. Avoid the default `noeviction` setting in production; it causes Redis to return errors instead of freeing memory, which will cascade into application failures.
+
+---
+
+## Related Resources
+
+- [Race Condition: The Silent Bug That Breaks Production Systems](https://www.steve-bang.com/blog/race-condition-silent-bug-breaks-production) — Concurrency bugs and caching problems share a root cause: shared mutable state. Essential reading before caching in a multi-threaded environment.
+- [Idempotency Failures: Why Your API Breaks Under Retry](https://www.steve-bang.com/blog/idempotency-failures-api-breaks-under-retry) — Cache invalidation and retry logic interact in subtle ways. Understand idempotency before combining the two.
+- [CancellationToken in .NET: Best Practices to Prevent Wasted Work](https://www.steve-bang.com/blog/cancellationtoken-preventing-wasted-work-dotnet-backend) — If your cache miss triggers a slow DB call, CancellationToken is how you avoid wasting that work on abandoned requests.
+- [Dependency Injection in .NET: The Complete Guide for 2026](https://www.steve-bang.com/blog/dependency-injection-dotnet-2026) — Injecting `IDistributedCache` and `IMemoryCache` the right way is covered here — scope, lifetime, and testability.
+- [Top 15 Mistakes Developers Make When Creating APIs](https://www.steve-bang.com/blog/top-15-mistakes-dotnet-developers-make-when-creating-apis) — Several of the top 15 API mistakes relate directly to incorrect caching decisions at the HTTP layer.

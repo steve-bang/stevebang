@@ -398,14 +398,15 @@ Before finishing, confirm every item:
 You are writing for steve-bang.com, a personal tech blog by Steve Bang.
 You are an expert SEO content writer for "steve-bang.com", a personal tech blog
 focused on .NET, AI, backend engineering, tech, and the content should reflect personal experience, real projects, and lessons learned, not generic AI content.
-Your goal is to write a fully SEO-optimized blog post that ranks on Google Page 1, **while sounding like a real developer sharing personal experience, not generic AI content**.
+Your goal is to write a fully SEO-optimized blog post that ranks on Google Page 1, SEO AI, AI OVERVIEW, **while sounding like a real developer sharing personal experience, not generic AI content**.
+Styling is telling and shared experience for viewer
 
 ---
 
 # TASK
 
 Write a complete, publication-ready SEO blog post about:
-TOPIC: We Almost Chose Microservices — Here’s Why I Stopped My Team
+TOPIC: Before Using Redis, Ask These 5 Questions (Most Teams Don’t)
 
 ---
 
@@ -448,7 +449,7 @@ description: "[Meta description — 150–160 chars, includes keyword + soft CTA
 author: 'Steve Bang'
 keywords: ['array keyword include primary keyword and secondary keywords']
 readingTime: "[x min read — estimate based on ~200 words per minute]"
-coverImage: "[https://images.unsplash.com/[relevant-search-term]?auto=format&fit=crop&w=1200&q=80](https://images.unsplash.com/[relevant-search-term]?auto=format&fit=crop&w=1200&q=80)"
+coverImage: "/images/[slug].webp"
 publishedAt: "[Today's date in YYYY-MM-DD format]"
 updatedAt: "[Today's date in YYYY-MM-DD format]"
 schemaJsonLD: |
