@@ -1,0 +1,408 @@
+---
+slug: "ai-generated-dotnet-code-review-checklist"
+title: "Vibe Coding vs. Production: A Code Review Checklist for AI-Generated .NET Code"
+description: "AI-generated .NET code often works in the demo but fails in production. Use this 25-point checklist to review C# for security, performance, and reliability."
+author: 'Steve Bang'
+keywords: ['vibe coding', 'AI-generated code review', 'code review checklist', 'ASP.NET Core security', 'Claude Code', 'GitHub Copilot', 'dotnet best practices', 'AI code quality']
+readingTime: "13 min read"
+image: "/images/ai-generated-dotnet-code-review-checklist.webp"
+publishedAt: "2026-11-16"
+updatedAt: "2026-11-16"
+schemaJsonLD: |
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What is vibe coding?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Vibe coding is a style of development where you describe what you want in natural language and let an AI assistant generate most of the code, steering by results rather than reading every line. It is fast for prototypes, but the output needs a deliberate review before it reaches production."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Is AI-generated .NET code safe to deploy to production?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Only after review. AI-generated code often works on the happy path but can contain insecure defaults, missing authorization, hidden performance problems such as N+1 queries, and reliability gaps such as missing cancellation tokens or retries. Treat it like code from a fast junior developer and review it against a checklist."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What are the most common problems in AI-generated C# code?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The most common problems are hardcoded secrets, incomplete JWT validation, SQL built by string interpolation, entities exposed directly as API models, wrong dependency injection lifetimes, blocking calls on async code, N+1 queries, and swallowed exceptions."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How can I make an AI assistant write better .NET code?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Give it persistent context, such as a CLAUDE.md or similar instructions file, that states your architecture, conventions, and non-negotiable rules. Turn on nullable reference types and TreatWarningsAsErrors, add analyzers and tests, and ask the assistant to explain risky decisions instead of only generating code."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Should I review AI-generated code differently from human-written code?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The standard is the same, but the failure modes differ. AI code tends to look polished and consistent, which makes subtle problems easy to miss. It may also use outdated APIs or invent members that do not exist. Review for behavior under failure, load, and malicious input, not only for whether it compiles."
+        }
+      }
+    ]
+  }
+---
+
+You ask an AI assistant for a "secure, production-ready" endpoint. Thirty seconds later you have a controller, a service, a repository, and a tidy set of DTOs. It builds. The demo works. You ship it.
+
+Three weeks later, the on-call phone rings.
+
+Vibe coding has genuinely changed how fast we build .NET applications. I use it daily, and I'm not going back. But the speed creates a new risk: **AI-generated code looks finished long before it is finished.** It is consistent, well-formatted, and confident, and that polish quietly lowers your guard during review.
+
+This article gives you a practical, 25-point checklist for reviewing AI-generated .NET code before it reaches production. It is organized by the kind of failure you are trying to prevent: security, correctness, performance, reliability, and maintainability.
+
+## What Is Vibe Coding, and Why Does It Need a Different Review?
+
+**Vibe coding** means describing what you want in natural language and letting an AI assistant (Claude Code, GitHub Copilot, Cursor, and others) produce most of the implementation, steering by results instead of reading every line.
+
+For prototypes, that is a superpower. For production, it shifts your job from *writing* code to *auditing* code. The risk is not that AI writes bad code all the time. The risk is that it writes code that is **right in the happy path and wrong at the edges**:
+
+- It optimizes for "it runs" and "it looks idiomatic", not for "it survives a hostile request".
+- It has no knowledge of your threat model, your traffic, or your database size.
+- It may use deprecated APIs, outdated package versions, or members that do not exist.
+- It rarely volunteers what it left out, such as authorization, cancellation, retries, or limits.
+
+A good review focuses on what is **missing** as much as on what is wrong. That is what this checklist is built around.
+
+## How to Use This Checklist
+
+Work through the sections in order. Security comes first because those failures are the most expensive. For each item, ask the AI to point to where the concern is handled. If it cannot, you have found a gap.
+
+A quick tip before we start: put your non-negotiable rules in a persistent instructions file such as `CLAUDE.md`, so the assistant follows them from the first prompt. Turn on `<Nullable>enable</Nullable>` and `<TreatWarningsAsErrors>true</TreatWarningsAsErrors>` in `Directory.Build.props` so the compiler catches a whole class of issues for free.
+
+---
+
+## 1. Security Checklist
+
+### ☐ 1. No secrets in source code
+
+AI assistants love to "make it work" by placing a connection string or signing key directly in `appsettings.json` or, worse, in a C# constant.
+
+```csharp
+// ❌ Generated for convenience
+private const string JwtKey = "super-secret-key-change-me-123";
+```
+
+Secrets belong in User Secrets for local development and in a managed vault such as Azure Key Vault in production. See [Secure Secrets in .NET: Key Vault and User Secrets](https://www.steve-bang.com/blog/secure-secrets-dotnet-keyvault-users-secret) for the full setup. Also search the diff for anything that looks like a key, token, or password before every commit.
+
+### ☐ 2. JWT validation is complete
+
+Generated authentication code often validates only the signature and silently skips the rest:
+
+```csharp
+// ❌ Incomplete: accepts tokens for any audience, from any issuer, forever
+options.TokenValidationParameters = new TokenValidationParameters
+{
+    IssuerSigningKey = key,
+    ValidateIssuer = false,
+    ValidateAudience = false,
+    ValidateLifetime = false
+};
+```
+
+A production configuration validates everything:
+
+```csharp
+// ✅ Validate issuer, audience, lifetime, and signing key
+options.TokenValidationParameters = new TokenValidationParameters
+{
+    ValidateIssuer = true,
+    ValidIssuer = config["Jwt:Issuer"],
+    ValidateAudience = true,
+    ValidAudience = config["Jwt:Audience"],
+    ValidateLifetime = true,
+    ValidateIssuerSigningKey = true,
+    IssuerSigningKey = key,
+    ClockSkew = TimeSpan.FromMinutes(1)
+};
+```
+
+If you want to understand why each flag matters, read [JWT Signing and Verification: How It Really Works](https://www.steve-bang.com/blog/jwt-signing-and-verification-how-it-works).
+
+### ☐ 3. Every endpoint has an explicit authorization decision
+
+AI often generates the controller and forgets `[Authorize]`, or adds it only to the endpoints you mentioned. Make this a rule: **every endpoint is either `[Authorize]` (with a policy or role) or deliberately `[AllowAnonymous]`.** A good safety net is a fallback policy:
+
+```csharp
+builder.Services.AddAuthorizationBuilder()
+    .SetFallbackPolicy(new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build());
+```
+
+Now anything you forget is protected by default instead of exposed by default.
+
+### ☐ 4. Resource-level authorization (no IDOR)
+
+Authentication answers "who are you?". Authorization answers "is this *yours*?". Generated code frequently loads `GET /orders/{id}` without checking that the order belongs to the caller:
+
+```csharp
+// ❌ Any authenticated user can read any order by guessing IDs
+var order = await db.Orders.FindAsync(id, ct);
+
+// ✅ Scope the query to the current user
+var order = await db.Orders
+    .AsNoTracking()
+    .FirstOrDefaultAsync(o => o.Id == id && o.OwnerId == currentUser.Id, ct);
+```
+
+### ☐ 5. No SQL built from strings
+
+This is a classic that AI still produces, especially in "quick" raw-SQL helpers:
+
+```csharp
+// ❌ SQL injection: FromSqlRaw treats the interpolated string as plain SQL
+var users = db.Users
+    .FromSqlRaw($"SELECT * FROM Users WHERE Name = '{name}'")
+    .ToList();
+
+// ✅ Parameterized by EF Core
+var users = db.Users
+    .FromSql($"SELECT * FROM Users WHERE Name = {name}")
+    .ToList();
+```
+
+`FromSql` (EF Core 7+) and `FromSqlInterpolated` turn interpolated values into parameters. `FromSqlRaw` with an interpolated string does not.
+
+### ☐ 6. Passwords are hashed with a real password hasher
+
+Ask what the assistant used. If you see MD5, SHA-1, or a bare SHA-256, stop. Use `PasswordHasher<TUser>`, Argon2, or PBKDF2 with a proper work factor and per-user salt. The details are covered in [Secure Password Hashing in .NET: Best Practices](https://www.steve-bang.com/blog/secure-password-hashing-in-dotnet-best-practices).
+
+### ☐ 7. Entities are not bound directly to requests or responses
+
+Binding an EF entity as the request body invites **over-posting**: a client sends `"isAdmin": true` and your model binder happily sets it. Returning entities leaks internal columns and creates serialization cycles.
+
+```csharp
+// ❌ Client controls every property, including Role and IsActive
+[HttpPost]
+public async Task<IActionResult> Create(User user) { ... }
+
+// ✅ Explicit contract containing only what the client may set
+public sealed record CreateUserRequest(string Email, string DisplayName);
+```
+
+### ☐ 8. CORS, HTTPS, and rate limits are intentional
+
+Generated `Program.cs` files often include this to "fix CORS errors":
+
+```csharp
+// ❌ Fine for a demo, dangerous with credentials or sensitive APIs
+policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod();
+```
+
+List the exact origins you trust. Confirm `UseHttpsRedirection()` and HSTS are present, and that public endpoints have rate limiting. We cover the latter in [API Rate Limiting in ASP.NET Core](https://www.steve-bang.com/blog/api-rate-limiting-aspnet-core).
+
+---
+
+## 2. Correctness Checklist
+
+### ☐ 9. Dependency injection lifetimes are correct
+
+The most common subtle bug is a **captive dependency**: a singleton that holds a scoped service such as `DbContext`.
+
+```csharp
+// ❌ Singleton captures a scoped DbContext: stale data and thread-safety bugs
+builder.Services.AddSingleton<IReportCache, ReportCache>(); // ctor takes AppDbContext
+```
+
+Turn on validation so the container fails fast instead of failing in production:
+
+```csharp
+builder.Host.UseDefaultServiceProvider(o =>
+{
+    o.ValidateScopes = true;
+    o.ValidateOnBuild = true;
+});
+```
+
+For a refresher on lifetimes, see [Dependency Injection in .NET](https://www.steve-bang.com/blog/dependency-injection-dotnet-2026).
+
+### ☐ 10. No blocking calls on async code
+
+Look for `.Result`, `.Wait()`, `.GetAwaiter().GetResult()`, and especially `async void`. These cause thread-pool starvation and deadlocks under load, and they rarely show up in a single-user demo.
+
+```csharp
+// ❌ Blocks a thread-pool thread for the whole call
+var data = httpClient.GetStringAsync(url).Result;
+
+// ✅ Async all the way
+var data = await httpClient.GetStringAsync(url, ct);
+```
+
+### ☐ 11. Time is handled consistently
+
+AI tends to scatter `DateTime.Now` through business logic. That makes code untestable and breaks across time zones. Use `DateTimeOffset.UtcNow`, or better, inject `TimeProvider` so tests can control the clock.
+
+### ☐ 12. Concurrency is considered
+
+Generated code usually does "read, check, write" with no protection:
+
+```csharp
+// ❌ Two simultaneous requests can both pass the check
+var account = await db.Accounts.FindAsync(id, ct);
+if (account.Balance >= amount)
+{
+    account.Balance -= amount;
+    await db.SaveChangesAsync(ct);
+}
+```
+
+Add optimistic concurrency (a `rowversion` / `[Timestamp]` column), a database constraint, or an atomic update. The full story is in [Race Conditions: The Silent Bug That Breaks Production](https://www.steve-bang.com/blog/race-condition-silent-bug-breaks-production).
+
+### ☐ 13. Every package and API actually exists (and is current)
+
+AI can **hallucinate** NuGet packages, method overloads, or configuration keys, and it often reaches for APIs that were deprecated versions ago. If the build passes, you are mostly safe from invented members, but check any new `PackageReference`: does it exist, is it the real publisher, and is the version current? If you use [Central Package Management](https://www.steve-bang.com/blog/central-package-management), make sure the assistant added the version to `Directory.Packages.props` instead of inlining it in the project file.
+
+---
+
+## 3. Performance Checklist
+
+### ☐ 14. No N+1 queries
+
+A loop that touches a navigation property is the signature N+1 pattern, and AI writes it constantly because it reads naturally:
+
+```csharp
+// ❌ One query for orders, then one query per order for its items
+var orders = await db.Orders.ToListAsync(ct);
+foreach (var order in orders)
+{
+    total += order.Items.Sum(i => i.Price); // lazy load or per-item query
+}
+
+// ✅ Let the database do the work in a single query
+var totals = await db.Orders
+    .Select(o => new { o.Id, Total = o.Items.Sum(i => i.Price) })
+    .ToListAsync(ct);
+```
+
+Learn to spot it in [The N+1 Problem in Entity Framework](https://www.steve-bang.com/blog/n-plus-one-problem-entity-framework), and see the wider list in [Entity Framework Core Performance: 10 Mistakes Killing Your App](https://www.steve-bang.com/blog/ef-core-performance-mistakes).
+
+### ☐ 15. Read queries use `AsNoTracking` and projections
+
+Read-only endpoints should not pay for change tracking, and they should not load whole entities when the response needs three fields. Use `AsNoTracking()` and `Select(...)` into a DTO.
+
+### ☐ 16. List endpoints are paginated and bounded
+
+"Return all customers" works with 20 rows in your dev database. It takes down production at 2 million. Every list endpoint needs a page size with a **hard maximum**, a stable sort order, and ideally a total count strategy that does not scan the table.
+
+### ☐ 17. `CancellationToken` flows end to end
+
+Generated controllers often accept a `CancellationToken` but then fail to pass it down, or omit it entirely. When a client disconnects, the work should stop.
+
+```csharp
+// ✅ Token is accepted at the edge and passed to every async call
+[HttpGet("{id:guid}")]
+public async Task<ActionResult<OrderDto>> Get(Guid id, CancellationToken ct)
+    => await service.GetAsync(id, ct);
+```
+
+More on why this matters in [CancellationToken in .NET: Preventing Wasted Work](https://www.steve-bang.com/blog/cancellationtoken-preventing-wasted-work-dotnet-backend).
+
+### ☐ 18. Caching is deliberate
+
+If the assistant added caching, check three things: what is the **key**, what is the **expiration**, and what happens on **invalidation**? An in-memory cache keyed without the tenant or user ID is a data leak waiting to happen. Before reaching for Redis at all, read [Before Using Redis, Ask These 5 Questions](https://www.steve-bang.com/blog/before-using-redis-ask-these-5-questions).
+
+---
+
+## 4. Reliability Checklist
+
+### ☐ 19. Errors are handled once, centrally, and never swallowed
+
+The two AI favorites are the empty `catch` and the `try/catch` in every controller action that returns a different shape each time.
+
+```csharp
+// ❌ The failure disappears, and the caller thinks it succeeded
+try { await emailSender.SendAsync(message, ct); }
+catch (Exception) { }
+```
+
+Use a single exception handler that returns `ProblemDetails`, log with context, and let unexpected exceptions surface as 500s instead of being hidden.
+
+### ☐ 20. `HttpClient` comes from `IHttpClientFactory`
+
+`new HttpClient()` inside a method exhausts sockets under load and ignores DNS changes. Use typed or named clients registered with `AddHttpClient`, and attach a resilience handler for timeouts and retries.
+
+### ☐ 21. Retried operations are idempotent
+
+If a client, a message broker, or a resilience policy can retry a request, a second delivery must not create a second charge, order, or email. Look for idempotency keys or natural unique constraints on every write that matters. The failure modes are explained in [Idempotency Failures: When Your API Breaks Under Retry](https://www.steve-bang.com/blog/idempotency-failures-api-breaks-under-retry).
+
+### ☐ 22. Multi-step writes are atomic
+
+"Save to the database, then publish an event" is two operations that can fail independently. If the assistant wrote that sequence, ask what happens when the process dies between the two steps. The [Outbox Pattern in .NET](https://www.steve-bang.com/blog/outbox-pattern-dotnet-distributed-transactions) exists for exactly this.
+
+---
+
+## 5. Maintainability Checklist
+
+### ☐ 23. Layer boundaries are respected
+
+Assistants optimize locally. Left alone, they will put an EF query in a controller or reference `Infrastructure` from `Domain` because it was the shortest path to green. If you follow Clean Architecture or DDD, state the dependency rules in your instructions file and verify them in review (or with an architecture test).
+
+### ☐ 24. There are tests that can fail
+
+AI writes tests that mirror its own implementation, so they pass by construction. Check that the tests assert **behavior**, cover the unhappy paths (invalid input, unauthorized caller, not found, concurrent update), and would actually fail if you broke the code. A quick sanity check: change a condition in the implementation and confirm a test goes red.
+
+### ☐ 25. You can explain every line you are about to merge
+
+This is the final gate. If you cannot explain why a block of code is there, you are not ready to own it at 2 a.m. Ask the assistant to explain the part you do not understand, then decide whether to keep it, simplify it, or delete it.
+
+---
+
+## A Practical Workflow: Make the Checklist Cheap
+
+A 25-point list is only useful if people actually run it. Three habits make it sustainable:
+
+1. **Encode rules once.** Put your conventions in `CLAUDE.md` (or the equivalent for your tool): architecture, banned patterns, required patterns, build and test commands. The assistant then follows them from the first prompt instead of you correcting the same mistakes forever.
+2. **Let the toolchain do the boring checks.** Enable nullable reference types, `TreatWarningsAsErrors`, and the .NET analyzers. Add `ValidateScopes` and `ValidateOnBuild` in development. Run dependency vulnerability scanning in CI.
+3. **Review in small slices.** A 2,000-line AI diff will not get a real review. Ask for one vertical slice at a time, such as one endpoint with its tests, and review each before moving on.
+
+You can also invert the process and ask the assistant to **review its own work** against this list in a fresh session. It will not catch everything, but it is a cheap first pass that finds the obvious gaps before a human spends time on them.
+
+## Key Takeaways
+
+- AI-generated code is best treated as work from a very fast junior developer: productive, confident, and in need of review.
+- The most dangerous gaps are **omissions**: no authorization, no cancellation, no pagination, no idempotency.
+- Most security issues in generated code are the classics: secrets in source, incomplete JWT validation, string-built SQL, and unscoped queries.
+- Compiler settings, analyzers, DI validation, and a good instructions file remove a large share of problems before review even starts.
+- Speed is only a gain if the code you ship is code you understand.
+
+## Frequently Asked Questions
+
+**Q: What is vibe coding?**
+A: Vibe coding is building software by describing what you want in natural language and letting an AI assistant generate most of the code, steering by the results rather than reading every line. It is excellent for prototypes and exploration, but production code still needs deliberate review.
+
+**Q: Is AI-generated .NET code safe to deploy to production?**
+A: Only after you review it. It often works on the happy path while hiding insecure defaults, missing authorization, N+1 queries, or reliability gaps. Apply the same standards you would to any pull request, and pay extra attention to what the code leaves out.
+
+**Q: What are the most common problems in AI-generated C# code?**
+A: Hardcoded secrets, incomplete JWT validation, SQL built from interpolated strings, entities used directly as API models, wrong dependency injection lifetimes, blocking calls on async code, N+1 queries, and swallowed exceptions.
+
+**Q: How can I make an AI assistant write better .NET code?**
+A: Give it persistent context, such as a `CLAUDE.md` file with your architecture, conventions, and hard rules. Enable nullable reference types and warnings-as-errors, add analyzers and tests, and ask it to explain risky decisions rather than only generating code.
+
+**Q: Should I review AI-generated code differently from human-written code?**
+A: The bar is the same, but the failure modes differ. AI code looks polished and uniform, which makes subtle problems easy to overlook, and it can use outdated APIs or invent members. Review behavior under failure, load, and malicious input, not just whether it compiles.
+
+---
+
+## Related Resources
+
+- [Top 15 Mistakes .NET Developers Make When Creating APIs](https://www.steve-bang.com/blog/top-15-mistakes-dotnet-developers-make-when-creating-apis) — The human-written version of many pitfalls AI repeats.
+- [Secure Secrets in .NET: Key Vault and User Secrets](https://www.steve-bang.com/blog/secure-secrets-dotnet-keyvault-users-secret) — Keep credentials out of source code and out of AI prompts.
+- [JWT vs OAuth2 vs API Keys](https://www.steve-bang.com/blog/jwt-vs-oauth2-vs-api-keys) — Pick the right authentication approach before asking AI to implement it.
+- [Entity Framework Core Performance: 10 Mistakes Killing Your App](https://www.steve-bang.com/blog/ef-core-performance-mistakes) — The performance checks from this checklist in more depth.
+- [Middleware Pipeline in ASP.NET Core](https://www.steve-bang.com/blog/middleware-pipeline-aspnet-core) — Understand where authentication, rate limiting, and error handling belong.
