@@ -1,0 +1,323 @@
+---
+slug: "vibe-coding-dotnet-api-claude-code-what-worked-what-broke"
+title: "Vibe Coding a .NET API with Claude Code: What Worked and What Broke"
+description: "A practical field guide to building an ASP.NET Core API with Claude Code: the setup, prompts, and workflow that work, and the bugs AI keeps introducing."
+author: 'Steve Bang'
+keywords: ['vibe coding', 'Claude Code', 'ASP.NET Core API', 'AI coding assistant', 'CLAUDE.md', 'AI pair programming', 'dotnet', 'Entity Framework Core', 'AI-generated code']
+readingTime: "14 min read"
+image: "/images/vibe-coding-dotnet-api-claude-code-what-worked-what-broke.webp"
+publishedAt: "2026-11-18"
+updatedAt: "2026-11-18"
+schemaJsonLD: |
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "Can Claude Code build a production-ready ASP.NET Core API?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Claude Code can generate most of the structure and boilerplate of an ASP.NET Core API quickly, but it should not be trusted to produce production-ready code unreviewed. You still need to verify security, dependency injection lifetimes, query performance, error handling, and tests. Used with clear instructions and small, reviewed steps, it is a strong accelerator."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What is a CLAUDE.md file and why does it matter for .NET projects?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "CLAUDE.md is a file in your repository that Claude Code reads at the start of a session. For a .NET solution it should describe the architecture and layer rules, the build, test, and migration commands, coding conventions, and patterns that are banned or required. It removes the need to repeat the same instructions in every prompt."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What does AI get wrong most often when writing .NET code?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Common problems include wrong dependency injection lifetimes, N+1 queries and loading entire entities, forgetting CancellationToken, using the EF Core in-memory provider in tests, over-engineering with unnecessary abstractions, swallowing exceptions, and relying on outdated APIs or packages."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How should I structure prompts when vibe coding a backend?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Ask for a plan before code, work in small vertical slices such as one endpoint with its tests, state the constraints explicitly, and ask the assistant to explain trade-offs. Review and commit after every slice instead of generating a whole feature at once."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "When should I not use vibe coding on a .NET project?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Be most cautious with security-critical code such as authentication, authorization, and cryptography, with data migrations on live databases, and with concurrency-sensitive logic like payments or inventory. Use AI to draft and explain, but design and verify these areas yourself."
+        }
+      }
+    ]
+  }
+---
+
+Everyone has seen the demo: type a sentence, watch an AI assistant produce a working API. Very few people write about the second week, when you try to deploy the thing, extend it, and trust it.
+
+This article is a field guide to building an ASP.NET Core API with **Claude Code**, Anthropic's terminal-based coding agent. It covers the setup that made the difference, the tasks where the assistant genuinely saves hours, the places where it reliably goes wrong, and the workflow that keeps you in control.
+
+I will keep the claims honest. AI-assisted development is not magic and it is not a fraud. It is a very fast collaborator with strong pattern recall, weak judgment about your specific context, and no instinct for what it has not been told. Everything below follows from that.
+
+> If you want the review side of this story, pair this article with [Vibe Coding vs. Production: A Code Review Checklist for AI-Generated .NET Code](https://www.steve-bang.com/blog/ai-generated-dotnet-code-review-checklist).
+
+## The Project and the Ground Rules
+
+The sample scenario is a typical line-of-business backend:
+
+- ASP.NET Core Web API on a current .NET LTS release
+- Entity Framework Core with PostgreSQL
+- Clean Architecture style layering: `Api`, `Application`, `Domain`, `Infrastructure`
+- xUnit tests, Docker for local development, GitHub Actions for CI
+
+Before writing a single prompt, I set three ground rules. They matter more than any prompt trick.
+
+1. **The assistant proposes, I decide.** Architecture, security model, and data design are my decisions. The assistant implements and explains.
+2. **Nothing merges without a green build and passing tests.** The compiler and the test suite are the first reviewers.
+3. **Small slices, frequent commits.** If I cannot review a diff in a few minutes, it was too big.
+
+## Step 1: Write CLAUDE.md Before the First Prompt
+
+Claude Code reads a `CLAUDE.md` file from your repository at the start of every session. Treat it as the onboarding document you would give a new senior hire, except this hire has perfect recall and zero context about your decisions.
+
+A good `CLAUDE.md` for a .NET solution is short and specific. It does not say "write clean code". It states what is *unusual or important* about your repo:
+
+```markdown
+# CLAUDE.md
+
+## Commands
+- Build: `dotnet build -warnaserror`
+- Test all: `dotnet test`
+- Test one: `dotnet test --filter "FullyQualifiedName~CreateOrderTests"`
+- Add migration: `dotnet ef migrations add <Name> -p src/Infrastructure -s src/Api`
+
+## Architecture
+- Layers: Api -> Application -> Domain. Infrastructure implements Domain interfaces.
+- Domain has NO package references. Never reference Infrastructure from Application.
+- Controllers are thin: map request -> command/query -> response. No EF types in Api.
+
+## Rules
+- Every async method accepts and forwards a CancellationToken.
+- Never expose EF entities from endpoints. Use request/response records.
+- Read queries: AsNoTracking + projection to DTOs. No lazy loading.
+- NuGet versions live in Directory.Packages.props only.
+- Errors: throw domain exceptions; the global handler maps them to ProblemDetails.
+- Do not add new packages without asking.
+```
+
+Two details are worth copying. First, the **exact commands**, including how to run a single test, so the assistant can verify its own work instead of guessing. Second, the **negative rules** ("do not add new packages without asking") that prevent the most expensive kinds of drift.
+
+Back the file with compiler enforcement, because the compiler never gets tired:
+
+```xml
+<!-- Directory.Build.props -->
+<Project>
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+  </PropertyGroup>
+</Project>
+```
+
+If you are not using it yet, [Central Package Management](https://www.steve-bang.com/blog/central-package-management) pairs well with an AI workflow: the assistant cannot quietly scatter different package versions across projects when versions live in one file.
+
+## Step 2: Plan First, Then Code
+
+The single most valuable habit is to ask for a **plan** before any code. For a new feature, a prompt like this works well:
+
+```text
+We need an endpoint to cancel an order.
+Before writing code, give me a plan:
+1. Which layers and files change
+2. The domain rules and edge cases (already shipped, already cancelled, concurrent updates)
+3. The tests you will write first
+Do not write code yet.
+```
+
+Reading a plan takes two minutes and catches the expensive mistakes: a business rule in the wrong layer, a missing edge case, an unnecessary new abstraction. Correcting a plan is cheap. Correcting 600 generated lines is not.
+
+Only after the plan is right do I say: "Implement step 1 only, with its tests, then stop."
+
+## What Worked
+
+### 1. Scaffolding and boilerplate
+
+Project structure, DI registration, EF Core entity configurations, request and response records, validators, a global exception handler. This is where the time savings are real. The assistant has seen thousands of examples of these patterns and produces them quickly and consistently.
+
+A global exception handler is a good example. With a clear instruction it generated a clean `IExceptionHandler` mapping domain exceptions to `ProblemDetails`, which is exactly the centralized approach you want:
+
+```csharp
+public sealed class DomainExceptionHandler(ILogger<DomainExceptionHandler> logger) : IExceptionHandler
+{
+    public async ValueTask<bool> TryHandleAsync(
+        HttpContext httpContext, Exception exception, CancellationToken ct)
+    {
+        if (exception is not DomainException domainException)
+            return false; // let the default handler produce a 500
+
+        logger.LogWarning(exception, "Domain rule violated: {Message}", exception.Message);
+
+        httpContext.Response.StatusCode = StatusCodes.Status422UnprocessableEntity;
+        await httpContext.Response.WriteAsJsonAsync(new ProblemDetails
+        {
+            Status = StatusCodes.Status422UnprocessableEntity,
+            Title = "Business rule violation",
+            Detail = domainException.Message
+        }, ct);
+
+        return true;
+    }
+}
+```
+
+Registered once with `AddExceptionHandler<DomainExceptionHandler>()` and `AddProblemDetails()`, it removes `try/catch` noise from every action.
+
+### 2. Tests for the unhappy paths (when asked explicitly)
+
+Left alone, AI writes tests that confirm the happy path. Asked specifically ("cover not found, already cancelled, and unauthorized caller"), it enumerates edge cases faster than most of us do at the end of a long day. Use it as a **test-case brainstorming partner** and then verify the assertions yourself.
+
+### 3. Mechanical refactors across many files
+
+Renaming a concept, moving a type between projects, converting constructors to primary constructors, replacing a pattern everywhere. The assistant can read, edit, build, and fix compile errors in a loop. This is dull, error-prone work for humans and a very good fit for an agent.
+
+### 4. Explaining unfamiliar code and generating docs
+
+"Explain what this middleware ordering does and what breaks if I move `UseAuthorization` above `UseRouting`." Explanations of existing code, migration scripts, and EF-generated SQL were consistently useful. For a refresher on why ordering matters, see [Middleware Pipeline in ASP.NET Core](https://www.steve-bang.com/blog/middleware-pipeline-aspnet-core).
+
+### 5. Docker, CI, and glue
+
+Multi-stage Dockerfiles, `docker-compose` files for the database, GitHub Actions workflows. Standard shapes, well represented in training data, and easy to verify by running them. Our [Docker multi-stage builds guide](https://www.steve-bang.com/blog/docker-multi-stage-builds-dotnet) and [CI/CD pipeline with GitHub Actions](https://www.steve-bang.com/blog/cicd-pipeline-aspnet-core-github-actions-2026) explain what good output looks like, which is what you need to judge the generated version.
+
+## What Broke
+
+This is the section that matters. Each item below is a pattern to look for in every diff.
+
+### 1. The in-memory database hid real bugs
+
+Asked to "write integration tests", the assistant often reaches for the EF Core in-memory provider because it is the shortest path to green tests:
+
+```csharp
+// ❌ Passes, but does not behave like PostgreSQL
+options.UseInMemoryDatabase("tests");
+```
+
+The in-memory provider does not enforce relational constraints, does not translate queries to SQL, and has no real transaction or concurrency behavior. Tests pass while real queries fail in production. Put it in `CLAUDE.md`: **integration tests run against a real database via Testcontainers**, not the in-memory provider.
+
+### 2. Queries that looked fine and were not
+
+Generated data access code is readable, which is exactly why performance problems slip through. Two recurring patterns:
+
+```csharp
+// ❌ Loads every entity, then updates them one at a time
+var orders = await db.Orders.Where(o => o.Status == Status.Pending).ToListAsync(ct);
+foreach (var order in orders) order.Status = Status.Expired;
+await db.SaveChangesAsync(ct);
+
+// ✅ One set-based statement (EF Core 7+)
+await db.Orders
+    .Where(o => o.Status == Status.Pending)
+    .ExecuteUpdateAsync(s => s.SetProperty(o => o.Status, Status.Expired), ct);
+```
+
+The other is the "include everything" habit: multiple `Include` calls on collection navigations produce a large joined result set. Use projections, or `AsSplitQuery()` where eager loading is truly needed. Our deep dives on the [N+1 problem](https://www.steve-bang.com/blog/n-plus-one-problem-entity-framework) and [EF Core performance mistakes](https://www.steve-bang.com/blog/ef-core-performance-mistakes) are the best checklist for reviewing this code.
+
+### 3. Dependency injection lifetimes
+
+When something needed a `DbContext` inside a class registered as a singleton, the assistant's first instinct was to make it work by changing lifetimes or injecting the service provider, not to question the design. Always enable validation so the container tells you:
+
+```csharp
+builder.Host.UseDefaultServiceProvider(o =>
+{
+    o.ValidateScopes = true;
+    o.ValidateOnBuild = true;
+});
+```
+
+Then read [Dependency Injection in .NET](https://www.steve-bang.com/blog/dependency-injection-dotnet-2026) so you can judge the proposed fix instead of accepting it.
+
+### 4. CancellationToken accepted, then dropped
+
+A very common near-miss: the controller takes a `CancellationToken`, but the service call, the repository call, or the `HttpClient` call inside does not receive it. The code compiles and looks complete. The wasted work only shows up under load. Put the rule in `CLAUDE.md` and search the diff for async calls without a token. More background in [CancellationToken in .NET](https://www.steve-bang.com/blog/cancellationtoken-preventing-wasted-work-dotnet-backend).
+
+### 5. Over-engineering
+
+Ask for "a clean architecture" and you may get interfaces with a single implementation, a generic repository wrapping `DbContext`, a mediator for a two-line operation, and a mapper library for three properties. The assistant is rewarding patterns it has seen, not asking whether you need them.
+
+Counter this explicitly: "No abstractions unless there are at least two implementations or a clear testing need." If you do want CQRS or a mediator, choose it deliberately, as in [CQRS in .NET for Production](https://www.steve-bang.com/blog/cqrs-pattern-dotnet-production-2026) or [MediatR in .NET](https://www.steve-bang.com/blog/mediatR-in-dot-net-a-complete-guide-with-real-examples-and-clean-architecture). Do not inherit it by accident.
+
+### 6. Tests that mirror the implementation
+
+When the assistant writes the code and the tests in the same breath, the tests often restate the implementation. They pass by construction. Two defenses: have it write tests from the **requirements** before implementing, and run a quick mutation check by hand. Break a condition in the code and confirm a test fails.
+
+### 7. Confident use of outdated or non-existent APIs
+
+Training data lags behind the framework. You may get deprecated overloads, old configuration styles, or the occasional package or method that does not exist. The build usually catches invented members. It will not catch a package that exists but is abandoned, or an old pattern that still compiles. Make "ask before adding a package" a hard rule, and check any new dependency yourself.
+
+### 8. Security by omission
+
+This is the most important one. The assistant did what I asked and nothing more. If I did not ask for authorization on an endpoint, resource-level ownership checks, rate limiting, or input size limits, they were often absent, and nothing in the output said so. Security has to be an explicit requirement in the plan, then verified in review. Use the [review checklist](https://www.steve-bang.com/blog/ai-generated-dotnet-code-review-checklist) for the full list.
+
+## The Workflow That Held Up
+
+After several iterations, this loop was the one that survived contact with real work:
+
+1. **Plan.** Ask for a plan with edge cases and tests. Edit the plan.
+2. **Tests first.** Have the assistant write failing tests from the requirements.
+3. **Implement one slice.** One endpoint or one use case, then stop.
+4. **Let the machine check.** Build with warnings as errors, run the tests, run the analyzers.
+5. **Review the diff yourself.** Read it as if a colleague wrote it. Look for omissions, not just errors.
+6. **Commit.** Small, descriptive commits make it easy to revert a bad direction.
+7. **Update `CLAUDE.md`.** Every time you correct the same mistake twice, turn it into a rule.
+
+Step 7 is where the compounding happens. A well-maintained `CLAUDE.md` makes the assistant measurably better on *your* codebase over time.
+
+## When Not to Vibe Code
+
+Use AI to draft and explain, but design and verify these areas yourself:
+
+- **Authentication, authorization, and cryptography.** Subtle mistakes here are catastrophic and silent.
+- **Migrations on live data.** Review every generated migration and test it against a production-like copy.
+- **Concurrency-sensitive logic**, such as payments, inventory, and anything with "check then update". See [Race Conditions: The Silent Bug That Breaks Production](https://www.steve-bang.com/blog/race-condition-silent-bug-breaks-production).
+- **Anything you could not explain to a teammate afterwards.**
+
+## Key Takeaways
+
+- **Context is leverage.** A short, specific `CLAUDE.md` plus compiler enforcement does more than clever prompts.
+- **Plan before code.** Correcting a plan is cheap; correcting generated code is not.
+- **Small slices.** If you cannot review the diff quickly, it was too big.
+- **AI excels at boilerplate, refactors, test brainstorming, and explanations**, and it is weakest at judgment about your context, security, and performance.
+- **The bugs to watch for are mostly omissions**: authorization, cancellation, pagination, real-database tests, and cleanup of needless abstractions.
+- **Turn repeated corrections into rules.** That is how the assistant gets better at your project.
+
+## Frequently Asked Questions
+
+**Q: Can Claude Code build a production-ready ASP.NET Core API?**
+A: It can produce most of the structure and boilerplate quickly, but it should not be trusted to produce production-ready code unreviewed. You still need to verify security, DI lifetimes, query performance, error handling, and tests. With clear instructions and small, reviewed steps, it is a strong accelerator.
+
+**Q: What is a CLAUDE.md file and why does it matter for .NET projects?**
+A: It is a file in your repository that Claude Code reads at the start of a session. For .NET it should describe layer rules, build, test, and migration commands, conventions, and banned or required patterns, so you do not repeat the same instructions in every prompt.
+
+**Q: What does AI get wrong most often when writing .NET code?**
+A: Wrong DI lifetimes, N+1 queries and over-fetching, missing `CancellationToken` propagation, in-memory database tests, unnecessary abstractions, swallowed exceptions, and outdated APIs or packages.
+
+**Q: How should I structure prompts when vibe coding a backend?**
+A: Ask for a plan first, work in small vertical slices, state constraints explicitly, and ask for trade-offs. Review and commit after every slice.
+
+**Q: When should I not use vibe coding on a .NET project?**
+A: Be most cautious with authentication, authorization, cryptography, live-data migrations, and concurrency-sensitive logic. Draft and explain with AI, but design and verify those yourself.
+
+---
+
+## Related Resources
+
+- [Vibe Coding vs. Production: A Code Review Checklist for AI-Generated .NET Code](https://www.steve-bang.com/blog/ai-generated-dotnet-code-review-checklist) — The 25-point checklist to run on every AI-generated diff.
+- [Central Package Management in .NET](https://www.steve-bang.com/blog/central-package-management) — Keep package versions in one place so AI cannot scatter them.
+- [Domain-Driven Design in .NET: From Concept to Implementation](https://www.steve-bang.com/blog/domain-driven-design-in-dot-net-from-concept-to-implementation) — The layering model worth stating in your `CLAUDE.md`.
+- [Entity Framework Core Performance: 10 Mistakes Killing Your App](https://www.steve-bang.com/blog/ef-core-performance-mistakes) — Review guide for generated data access code.
+- [Top 15 Mistakes .NET Developers Make When Creating APIs](https://www.steve-bang.com/blog/top-15-mistakes-dotnet-developers-make-when-creating-apis) — Classic API pitfalls that AI repeats.
